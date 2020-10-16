@@ -2,8 +2,8 @@ ARCH ?= riscv64
 MODE ?= debug
 SMP ?= 2
 
-OBJDUMP := rust-objdump
-OBJCOPY := rust-objcopy
+OBJDUMP ?= rust-objdump
+OBJCOPY ?= rust-objcopy
 
 ifeq ($(ARCH), riscv64)
 target := riscv64imac-unknown-none-elf

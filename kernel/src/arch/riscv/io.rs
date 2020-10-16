@@ -1,4 +1,8 @@
-pub fn console_putchar(ch: u8) {
+use core::fmt::{Arguments, Result, Write};
+
+use spin::Mutex;
+
+fn console_putchar(ch: u8) {
     let _ret: usize;
     let arg0: usize = ch as usize;
     let arg1: usize = 0;
@@ -14,8 +18,24 @@ pub fn console_putchar(ch: u8) {
     }
 }
 
-pub fn print(s: &str) {
-    for c in s.bytes() {
-        console_putchar(c);
+struct Console;
+
+impl Write for Console {
+    fn write_str(&mut self, s: &str) -> Result {
+        for c in s.bytes() {
+            if c == 127 {
+                console_putchar(8);
+                console_putchar(b' ');
+                console_putchar(8);
+            } else {
+                console_putchar(c);
+            }
+        }
+        Ok(())
     }
+}
+
+pub fn putfmt(fmt: Arguments) {
+    static CONSOLE: Mutex<Console> = Mutex::new(Console);
+    CONSOLE.lock().write_fmt(fmt).unwrap();
 }

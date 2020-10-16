@@ -1,6 +1,7 @@
 ARCH ?= riscv64
 MODE ?= debug
 SMP ?= 2
+LOG ?=
 
 OBJDUMP ?= rust-objdump
 OBJCOPY ?= rust-objcopy

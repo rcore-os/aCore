@@ -1,0 +1,39 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly-2020-10-15
+        override: true
+        components: rustfmt
+    - name: Check code format
+      run: cd kernel && cargo fmt -- --check
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        arch: [riscv64]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly-2020-10-15
+        components: rust-src, clippy, llvm-tools-preview
+    - name: Setup rust target
+      run: rustup target add $(cd kernel && cat targets.txt | grep ${{ matrix.arch }})
+
+    - name: Clippy
+      run: cd kernel && make clippy ARCH=${{ matrix.arch }} && cd ..
+
+    - name: Build kernel
+      run: cd kernel && make ARCH=${{ matrix.arch }} && cd ..

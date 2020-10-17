@@ -3,15 +3,11 @@ MODE ?= debug
 SMP ?= 2
 LOG ?=
 
-OBJDUMP ?= rust-objdump
-OBJCOPY ?= rust-objcopy
+sysroot := $(shell rustc --print sysroot)
+OBJDUMP ?= $(shell find $(sysroot) -name llvm-objdump)
+OBJCOPY ?= $(shell find $(sysroot) -name llvm-objcopy)
 
-ifeq ($(ARCH), riscv64)
-target := riscv64imac-unknown-none-elf
-else
-$(error Unsupported architecture $(ARCH))
-endif
-
+target := $(shell cat targets.txt | grep $(ARCH))
 qemu := qemu-system-$(ARCH)
 build_path := target/$(target)/$(MODE)
 kernel := $(build_path)/acore
@@ -33,6 +29,9 @@ endif
 .PHONY: build kernel run qemu asm clean
 
 build: $(kernel_img)
+
+clippy:
+	cargo clippy $(build_args) -- -D warnings
 
 kernel:
 	@echo Building aCore kernel

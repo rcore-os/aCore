@@ -1,5 +1,6 @@
 pub mod cpu;
 pub mod io;
+mod sbi;
 
 global_asm!(include_str!("boot/entry.S"));
 

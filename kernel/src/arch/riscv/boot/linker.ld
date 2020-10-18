@@ -38,5 +38,5 @@ SECTIONS
     }
 
     . = ALIGN(4K);
-    PROVIDE(end = .);
+    PROVIDE(kernel_end = .);
 }

@@ -1,13 +1,12 @@
 pub mod cpu;
 pub mod io;
+pub mod memory;
 mod sbi;
 
 global_asm!(include_str!("boot/entry.S"));
 
-pub fn primary_init(arg0: usize, _arg1: usize) {
-    println!("Hello, CPU {}!", arg0);
-}
+pub fn primary_init_early(_hartid: usize, _device_tree_paddr: usize) {}
 
-pub fn secondary_init(arg0: usize, _arg1: usize) {
-    println!("Hello, CPU {}!", arg0);
-}
+pub fn primary_init(_hartid: usize, _device_tree_paddr: usize) {}
+
+pub fn secondary_init(_hartid: usize, _device_tree_paddr: usize) {}

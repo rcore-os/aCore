@@ -4,8 +4,33 @@
 name = "acore"
 version = "0.1.0"
 dependencies = [
+ "bitmap-allocator",
+ "buddy_system_allocator",
  "log",
- "spin",
+ "spin 0.6.0",
+]
+
+[[package]]
+name = "bit_field"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed8765909f9009617974ab6b7d332625b320b33c326b1e9321382ef1999b5d56"
+
+[[package]]
+name = "bitmap-allocator"
+version = "0.1.0"
+source = "git+https://github.com/rcore-os/bitmap-allocator?rev=03bd9909#03bd9909d0dc85e99f5559b97a163ab81073df83"
+dependencies = [
+ "bit_field",
+]
+
+[[package]]
+name = "buddy_system_allocator"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "878f98e1ffe8407ab5e06c91715d45ca173d775c0fc77735c0b3ec88aa8161af"
+dependencies = [
+ "spin 0.5.2",
 ]
 
 [[package]]
@@ -22,6 +47,12 @@ checksum = "4fabed175da42fed1fa0746b0ea71f412aa9d35e76e95e59b192c64b9dc2bf8b"
 dependencies = [
  "cfg-if",
 ]
+
+[[package]]
+name = "spin"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spin"

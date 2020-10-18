@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 spin = "0.6"
+buddy_system_allocator = "0.5.0"
+bitmap-allocator = { git = "https://github.com/rcore-os/bitmap-allocator", rev = "03bd9909" }

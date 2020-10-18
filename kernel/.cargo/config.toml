@@ -1,4 +1,9 @@
+[build]
+target = "riscv64imac-unknown-none-elf"
+
 [target.riscv64imac-unknown-none-elf]
-rustflags = [
-    "-C", "link-arg=-Tsrc/arch/riscv/boot/linker.ld",
-]
+rustflags = ["-C", "link-arg=-Tsrc/arch/riscv/boot/linker.ld"]
+runner = "qemu-system-riscv64 -M virt -bios default -nographic -smp 2 -kernel"
+
+[unstable]
+build-std = ["core", "alloc"]

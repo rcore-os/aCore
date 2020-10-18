@@ -4,7 +4,7 @@ use bitmap_allocator::BitAlloc;
 use buddy_system_allocator::LockedHeap;
 use spin::Mutex;
 
-use crate::arch::memory::{FrameAlloc, KERNEL_HEAP_SIZE, MEMORY_OFFSET};
+use crate::arch::memory::{FrameAlloc, KERNEL_HEAP_SIZE, MEMORY_OFFSET, PHYS_VIRT_OFFSET};
 
 pub const PAGE_SIZE: usize = 0x1000;
 
@@ -61,6 +61,14 @@ pub fn clear_bss() {
 pub fn init() {
     init_heap();
     init_frame_allocator();
+}
+
+pub fn phys_to_virt(paddr: usize) -> usize {
+    paddr + PHYS_VIRT_OFFSET
+}
+
+pub fn virt_to_phys(vaddr: usize) -> usize {
+    vaddr - PHYS_VIRT_OFFSET
 }
 
 pub fn alloc_frame() -> Option<usize> {

@@ -26,7 +26,7 @@ qemu_args += \
 	-device loader,file=$(kernel_img),addr=0x80200000
 endif
 
-.PHONY: build kernel run qemu asm clean
+.PHONY: build kernel run qemu debug asm clean
 
 build: $(kernel_img)
 
@@ -44,6 +44,11 @@ run: build qemu
 
 qemu:
 	$(qemu) $(qemu_args)
+
+debug:
+	$(qemu) $(qemu_args) -s -S &
+	@sleep 1
+	gdb $(kernel) -ex "target remote :1234"
 
 asm:
 	$(OBJDUMP) -d $(kernel) | less

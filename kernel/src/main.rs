@@ -37,6 +37,7 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
         while !AP_CAN_INIT.load(Ordering::Relaxed) {
             spin_loop_hint();
         }
+        memory::secondary_init();
         arch::secondary_init(arg0, arg1);
     }
     println!("Hello, CPU {}!", cpu_id);

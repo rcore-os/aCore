@@ -5,9 +5,13 @@
 pub mod addr;
 mod frame;
 mod heap;
+mod paging;
+mod vmm;
 
 pub use addr::{PhysAddr, VirtAddr};
 pub use frame::Frame;
+pub use paging::{PagingError, PagingResult};
+pub use vmm::MemorySet;
 
 pub const PAGE_SIZE: usize = 0x1000;
 
@@ -27,4 +31,10 @@ pub fn clear_bss() {
 pub fn init() {
     heap::init();
     frame::init();
+    vmm::init();
+}
+
+pub fn secondary_init() {
+    vmm::secondary_init();
+    info!("secondary CPU memory init end.");
 }

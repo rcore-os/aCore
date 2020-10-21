@@ -1,7 +1,8 @@
 use alloc::vec::Vec;
 use core::ops::Range;
 
-use crate::memory::{addr::virt_to_phys, MemorySet, PAGE_SIZE};
+use crate::error::AcoreResult;
+use crate::memory::{addr, MemorySet};
 
 pub use super::paging::RvPageTable as ArchPageTable;
 
@@ -16,9 +17,11 @@ pub fn get_phys_memory_regions() -> Vec<Range<usize>> {
     extern "C" {
         fn kernel_end();
     }
-    let start = virt_to_phys(kernel_end as usize) + PAGE_SIZE;
+    let start = addr::align_up(addr::virt_to_phys(kernel_end as usize));
     let end = PHYS_MEMORY_END;
     vec![start..end]
 }
 
-pub fn create_mapping(_ms: &mut MemorySet<ArchPageTable>) {}
+pub fn create_mapping(_ms: &mut MemorySet) -> AcoreResult {
+    Ok(())
+}

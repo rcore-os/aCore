@@ -1,5 +1,7 @@
 //! Physical memory allocation.
 
+#![allow(dead_code)]
+
 use bitmap_allocator::BitAlloc;
 use core::mem::ManuallyDrop;
 use spin::Mutex;

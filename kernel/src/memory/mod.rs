@@ -1,7 +1,5 @@
 //! Physical and virtual memory management.
 
-#![allow(dead_code)]
-
 pub mod addr;
 mod frame;
 mod heap;
@@ -10,7 +8,7 @@ mod vmm;
 
 pub use addr::{PhysAddr, VirtAddr};
 pub use frame::Frame;
-pub use paging::{PagingError, PagingResult};
+pub use paging::{MMUFlags, PageTable, PageTableEntry, PagingError, PagingResult};
 pub use vmm::MemorySet;
 
 pub const PAGE_SIZE: usize = 0x1000;

@@ -9,8 +9,10 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 spin = "0.6"
+bitflags = "1.2"
 buddy_system_allocator = "0.5.0"
 bitmap-allocator = { git = "https://github.com/rcore-os/bitmap-allocator", rev = "03bd9909" }
+lazy_static = { version = "1.4", features = ["spin_no_std"] }
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
 riscv = { git = "https://github.com/rcore-os/riscv", rev = "21e32ee" }

@@ -1,15 +1,15 @@
-#![allow(dead_code)]
-
 use alloc::vec::Vec;
-use core::mem::ManuallyDrop;
+use core::{convert::From, mem::ManuallyDrop};
 
 use riscv::asm::{sfence_vma, sfence_vma_all};
-pub use riscv::paging::PageTableFlags;
-use riscv::paging::{FrameAllocator, Mapper, PageTable as RvPageTable, PageTableEntry};
+use riscv::paging::{
+    FrameAllocator, Mapper, PageTable as PT, PageTableEntry as PTE, PageTableFlags as PTF,
+};
 use riscv::register::satp;
 
 use crate::arch::memory::PHYS_VIRT_OFFSET;
-use crate::memory::{addr::phys_to_virt, Frame, PagingError, PagingResult, PhysAddr, VirtAddr};
+use crate::memory::{addr::phys_to_virt, Frame, PhysAddr, VirtAddr};
+use crate::memory::{MMUFlags, PageTable, PageTableEntry, PagingError, PagingResult};
 
 mod rv {
     pub use riscv::addr::{Frame, Page, PhysAddr, VirtAddr};
@@ -18,16 +18,73 @@ mod rv {
 #[cfg(target_arch = "riscv64")]
 type TopLevelPageTable<'a> = riscv::paging::Rv39PageTable<'a>;
 
-pub struct PageTable {
+pub struct RvPageTable {
     inner: TopLevelPageTable<'static>,
     root: Frame,
     allocator: PageTableFrameAllocator,
 }
 
-impl PageTable {
-    pub fn new() -> Self {
+impl From<MMUFlags> for PTF {
+    fn from(f: MMUFlags) -> Self {
+        let mut ret = PTF::VALID;
+        if f.contains(MMUFlags::READ) {
+            ret |= PTF::READABLE;
+        }
+        if f.contains(MMUFlags::WRITE) {
+            ret |= PTF::WRITABLE;
+        }
+        if f.contains(MMUFlags::EXECUTE) {
+            ret |= PTF::EXECUTABLE;
+        }
+        if f.contains(MMUFlags::USER) {
+            ret |= PTF::USER;
+        }
+        ret
+    }
+}
+
+impl From<PTF> for MMUFlags {
+    fn from(f: PTF) -> Self {
+        let mut ret = MMUFlags::empty();
+        if f.contains(PTF::READABLE) {
+            ret |= MMUFlags::READ;
+        }
+        if f.contains(PTF::WRITABLE) {
+            ret |= MMUFlags::WRITE;
+        }
+        if f.contains(PTF::EXECUTABLE) {
+            ret |= MMUFlags::EXECUTE;
+        }
+        if f.contains(PTF::USER) {
+            ret |= MMUFlags::USER;
+        }
+        ret
+    }
+}
+
+impl PageTableEntry for PTE {
+    fn addr(&self) -> PhysAddr {
+        self.addr().as_usize()
+    }
+    fn flags(&self) -> MMUFlags {
+        self.flags().into()
+    }
+    fn set_addr(&mut self, paddr: PhysAddr) {
+        let frame = rv::Frame::of_addr(rv::PhysAddr::new(paddr));
+        self.set(frame, self.flags())
+    }
+    fn set_flags(&mut self, flags: MMUFlags) {
+        self.set(self.frame(), flags.into())
+    }
+    fn clear(&mut self) {
+        self.set_unused()
+    }
+}
+
+impl PageTable for RvPageTable {
+    fn new() -> Self {
         let root = Frame::new().expect("failed to allocate root frame for page table");
-        let table = unsafe { &mut *(phys_to_virt(root.start_paddr()) as *mut RvPageTable) };
+        let table = unsafe { &mut *(phys_to_virt(root.start_paddr()) as *mut PT) };
         table.zero();
         Self {
             inner: TopLevelPageTable::new(table, PHYS_VIRT_OFFSET),
@@ -36,14 +93,8 @@ impl PageTable {
         }
     }
 
-    /// Constructs a multi-level page table from a physical address of the root page table.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe because the user must ensure that the page table indicated by the
-    /// memory region starting from `root_paddr` must has the correct format.
     unsafe fn from_root(root_paddr: PhysAddr) -> ManuallyDrop<Self> {
-        let table = &mut *(phys_to_virt(root_paddr) as *mut RvPageTable);
+        let table = &mut *(phys_to_virt(root_paddr) as *mut PT);
         ManuallyDrop::new(Self {
             inner: TopLevelPageTable::new(table, PHYS_VIRT_OFFSET),
             root: ManuallyDrop::into_inner(Frame::from_paddr(root_paddr)),
@@ -51,32 +102,15 @@ impl PageTable {
         })
     }
 
-    pub fn root_paddr(&self) -> PhysAddr {
-        self.root.start_paddr()
-    }
-
-    pub fn current_root_paddr() -> PhysAddr {
+    fn current_root_paddr() -> PhysAddr {
         satp::read().ppn() << 12
     }
 
-    pub fn current() -> ManuallyDrop<Self> {
-        unsafe { Self::from_root(Self::current_root_paddr()) }
+    unsafe fn set_current_root_paddr(root_paddr: PhysAddr) {
+        satp::set(satp::Mode::Sv39, 0, root_paddr >> 12)
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe because it switches the page table.
-    pub unsafe fn set_current(&self) {
-        let old_root = Self::current_root_paddr();
-        let new_root = self.root_paddr();
-        debug!("switch table {:#x?} -> {:#x?}", old_root, new_root);
-        if new_root != old_root {
-            satp::set(satp::Mode::Sv39, 0, new_root >> 12);
-            Self::flush_tlb(None);
-        }
-    }
-
-    pub fn flush_tlb(vaddr: Option<VirtAddr>) {
+    fn flush_tlb(vaddr: Option<VirtAddr>) {
         unsafe {
             if let Some(vaddr) = vaddr {
                 sfence_vma(0, vaddr)
@@ -86,26 +120,53 @@ impl PageTable {
         }
     }
 
-    pub fn get_entry(&mut self, vaddr: VirtAddr) -> PagingResult<&mut PageTableEntry> {
-        let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
-        self.inner.ref_entry(page).map_err(|_| PagingError::NoEntry)
+    fn root_paddr(&self) -> PhysAddr {
+        self.root.start_paddr()
     }
 
-    pub fn map(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: PageTableFlags) -> PagingResult {
+    fn get_entry(&mut self, vaddr: VirtAddr) -> PagingResult<&mut dyn PageTableEntry> {
+        let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
+        Ok(self
+            .inner
+            .ref_entry(page)
+            .map_err(|_| PagingError::NoEntry)?)
+    }
+
+    fn map(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: MMUFlags) -> PagingResult {
         let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
         let frame = rv::Frame::of_addr(rv::PhysAddr::new(paddr));
         self.inner
-            .map_to(page, frame, flags, &mut self.allocator)
+            .map_to(page, frame, flags.into(), &mut self.allocator)
             .map_err(|_| PagingError::MapError)?
             .flush();
         Ok(())
     }
 
-    pub fn unmap(&mut self, vaddr: VirtAddr) -> PagingResult {
-        self.get_entry(vaddr)
+    fn unmap(&mut self, vaddr: VirtAddr) -> PagingResult {
+        let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
+        self.inner
+            .unmap(page)
             .map_err(|_| PagingError::UnmapError)?
-            .set_unused();
+            .1
+            .flush();
         Ok(())
+    }
+
+    fn protect(&mut self, vaddr: VirtAddr, flags: MMUFlags) -> PagingResult {
+        let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
+        self.inner
+            .update_flags(page, flags.into())
+            .map_err(|_| PagingError::ProtectError)?
+            .flush();
+        Ok(())
+    }
+
+    fn query(&mut self, vaddr: VirtAddr) -> PagingResult<PhysAddr> {
+        let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
+        self.inner
+            .translate_page(page)
+            .map(|f| f.start_address().as_usize())
+            .ok_or(PagingError::QueryError)
     }
 }
 

@@ -8,7 +8,7 @@ mod vmm;
 
 pub use addr::{PhysAddr, VirtAddr};
 pub use frame::Frame;
-pub use paging::{MMUFlags, PageTable, PageTableEntry, PagingError, PagingResult};
+pub use paging::{MMUFlags, PageTable, PageTableEntry};
 pub use vmm::MemorySet;
 
 pub const PAGE_SIZE: usize = 0x1000;

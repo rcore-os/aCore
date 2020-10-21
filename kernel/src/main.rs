@@ -13,6 +13,7 @@ extern crate alloc;
 extern crate bitflags;
 
 mod consts;
+mod error;
 mod lang;
 #[macro_use]
 mod logging;

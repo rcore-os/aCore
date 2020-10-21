@@ -8,11 +8,13 @@ use riscv::paging::{
 use riscv::register::satp;
 
 use crate::arch::memory::PHYS_VIRT_OFFSET;
+use crate::error::{AcoreError, AcoreResult};
 use crate::memory::{addr::phys_to_virt, Frame, PhysAddr, VirtAddr};
-use crate::memory::{MMUFlags, PageTable, PageTableEntry, PagingError, PagingResult};
+use crate::memory::{MMUFlags, PageTable, PageTableEntry};
 
 mod rv {
     pub use riscv::addr::{Frame, Page, PhysAddr, VirtAddr};
+    pub use riscv::paging::{FlagUpdateError, MapToError, UnmapError};
 }
 
 #[cfg(target_arch = "riscv64")]
@@ -81,6 +83,30 @@ impl PageTableEntry for PTE {
     }
 }
 
+impl From<rv::MapToError> for AcoreError {
+    fn from(err: rv::MapToError) -> Self {
+        match err {
+            rv::MapToError::FrameAllocationFailed => AcoreError::NoMemory,
+            rv::MapToError::PageAlreadyMapped => AcoreError::AlreadyExists,
+            _ => AcoreError::BadState,
+        }
+    }
+}
+
+impl From<rv::UnmapError> for AcoreError {
+    fn from(err: rv::UnmapError) -> Self {
+        match err {
+            rv::UnmapError::PageNotMapped => AcoreError::NotFound,
+            _ => AcoreError::BadState,
+        }
+    }
+}
+
+impl From<rv::FlagUpdateError> for AcoreError {
+    fn from(_: rv::FlagUpdateError) -> Self {
+        AcoreError::NotFound
+    }
+}
 impl PageTable for RvPageTable {
     fn new() -> Self {
         let root = Frame::new().expect("failed to allocate root frame for page table");
@@ -124,49 +150,38 @@ impl PageTable for RvPageTable {
         self.root.start_paddr()
     }
 
-    fn get_entry(&mut self, vaddr: VirtAddr) -> PagingResult<&mut dyn PageTableEntry> {
+    fn get_entry(&mut self, vaddr: VirtAddr) -> AcoreResult<&mut dyn PageTableEntry> {
         let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
-        Ok(self
-            .inner
-            .ref_entry(page)
-            .map_err(|_| PagingError::NoEntry)?)
+        Ok(self.inner.ref_entry(page)?)
     }
 
-    fn map(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: MMUFlags) -> PagingResult {
+    fn map(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: MMUFlags) -> AcoreResult {
         let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
         let frame = rv::Frame::of_addr(rv::PhysAddr::new(paddr));
         self.inner
-            .map_to(page, frame, flags.into(), &mut self.allocator)
-            .map_err(|_| PagingError::MapError)?
+            .map_to(page, frame, flags.into(), &mut self.allocator)?
             .flush();
         Ok(())
     }
 
-    fn unmap(&mut self, vaddr: VirtAddr) -> PagingResult {
+    fn unmap(&mut self, vaddr: VirtAddr) -> AcoreResult {
         let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
-        self.inner
-            .unmap(page)
-            .map_err(|_| PagingError::UnmapError)?
-            .1
-            .flush();
+        self.inner.unmap(page)?.1.flush();
         Ok(())
     }
 
-    fn protect(&mut self, vaddr: VirtAddr, flags: MMUFlags) -> PagingResult {
+    fn protect(&mut self, vaddr: VirtAddr, flags: MMUFlags) -> AcoreResult {
         let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
-        self.inner
-            .update_flags(page, flags.into())
-            .map_err(|_| PagingError::ProtectError)?
-            .flush();
+        self.inner.update_flags(page, flags.into())?.flush();
         Ok(())
     }
 
-    fn query(&mut self, vaddr: VirtAddr) -> PagingResult<PhysAddr> {
+    fn query(&mut self, vaddr: VirtAddr) -> AcoreResult<PhysAddr> {
         let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
         self.inner
             .translate_page(page)
             .map(|f| f.start_address().as_usize())
-            .ok_or(PagingError::QueryError)
+            .ok_or(AcoreError::NotFound)
     }
 }
 

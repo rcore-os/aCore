@@ -11,6 +11,7 @@ use super::paging::{MMUFlags, PageTable, VmMapper};
 use crate::arch::memory::{ArchPageTable, PHYS_VIRT_OFFSET};
 
 /// A continuous virtual memory area with same flags.
+/// The `start` and `end` address are page aligned.
 #[derive(Debug)]
 pub struct VmArea {
     pub(super) start: VirtAddr,
@@ -59,7 +60,7 @@ impl<PT: PageTable> MemorySet<PT> {
         self.areas.clear();
     }
 
-    pub unsafe fn active(&self) {
+    pub unsafe fn activate(&self) {
         self.mapper.pgtable.set_current()
     }
 }
@@ -141,10 +142,10 @@ pub fn init() {
     }
     crate::arch::memory::create_mapping(&mut ms);
 
-    unsafe { ms.active() };
+    unsafe { ms.activate() };
     info!("kernel memory set init end:\n{:#x?}", ms);
 }
 
 pub fn secondary_init() {
-    unsafe { KERNEL_MEMORY_SET.lock().active() };
+    unsafe { KERNEL_MEMORY_SET.lock().activate() };
 }

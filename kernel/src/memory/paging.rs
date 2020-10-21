@@ -5,17 +5,7 @@ use core::mem::ManuallyDrop;
 use super::addr::{is_aligned, PhysAddr, VirtAddr};
 use super::vmm::VmArea;
 use super::PAGE_SIZE;
-
-#[derive(Debug)]
-pub enum PagingError {
-    NoEntry,
-    MapError,
-    UnmapError,
-    ProtectError,
-    QueryError,
-}
-
-pub type PagingResult<T = ()> = Result<T, PagingError>;
+use crate::error::AcoreResult;
 
 bitflags! {
     pub struct MMUFlags: usize {
@@ -58,34 +48,27 @@ pub trait PageTable: Sized {
 
     fn root_paddr(&self) -> PhysAddr;
 
-    fn get_entry(&mut self, vaddr: VirtAddr) -> PagingResult<&mut dyn PageTableEntry>;
+    fn get_entry(&mut self, vaddr: VirtAddr) -> AcoreResult<&mut dyn PageTableEntry>;
 
-    fn map(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: MMUFlags) -> PagingResult {
-        let entry = self.get_entry(vaddr).map_err(|_| PagingError::MapError)?;
+    fn map(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: MMUFlags) -> AcoreResult {
+        let entry = self.get_entry(vaddr)?;
         entry.set_addr(paddr);
         entry.set_flags(flags);
         Ok(())
     }
 
-    fn unmap(&mut self, vaddr: VirtAddr) -> PagingResult {
-        self.get_entry(vaddr)
-            .map_err(|_| PagingError::UnmapError)?
-            .clear();
+    fn unmap(&mut self, vaddr: VirtAddr) -> AcoreResult {
+        self.get_entry(vaddr)?.clear();
         Ok(())
     }
 
-    fn protect(&mut self, vaddr: VirtAddr, flags: MMUFlags) -> PagingResult {
-        self.get_entry(vaddr)
-            .map_err(|_| PagingError::ProtectError)?
-            .set_flags(flags);
+    fn protect(&mut self, vaddr: VirtAddr, flags: MMUFlags) -> AcoreResult {
+        self.get_entry(vaddr)?.set_flags(flags);
         Ok(())
     }
 
-    fn query(&mut self, vaddr: VirtAddr) -> PagingResult<PhysAddr> {
-        Ok(self
-            .get_entry(vaddr)
-            .map_err(|_| PagingError::QueryError)?
-            .addr())
+    fn query(&mut self, vaddr: VirtAddr) -> AcoreResult<PhysAddr> {
+        Ok(self.get_entry(vaddr)?.addr())
     }
 
     fn current() -> ManuallyDrop<Self> {

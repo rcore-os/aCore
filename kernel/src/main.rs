@@ -18,6 +18,8 @@ mod lang;
 #[macro_use]
 mod logging;
 mod memory;
+mod task;
+mod utils;
 
 #[cfg(target_arch = "riscv64")]
 #[path = "arch/riscv/mod.rs"]
@@ -53,15 +55,13 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
 
 pub fn normal_main() -> ! {
     info!("Hello, normal CPU!");
-    let mut a = alloc::vec::Vec::new();
-    for i in 0..10 {
-        a.push(i)
-    }
-    println!("{:#x?}", a);
+    unsafe { trapframe::init() };
+    crate::task::init();
     loop {}
 }
 
 pub fn io_main() -> ! {
     info!("Hello, I/O CPU!");
+    unsafe { trapframe::init() };
     loop {}
 }

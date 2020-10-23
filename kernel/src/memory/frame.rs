@@ -4,6 +4,7 @@
 
 use bitmap_allocator::BitAlloc;
 use core::mem::ManuallyDrop;
+
 use spin::Mutex;
 
 use super::{PhysAddr, PAGE_SIZE};

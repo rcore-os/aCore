@@ -4,9 +4,9 @@
 
 use alloc::collections::{btree_map::Entry, BTreeMap};
 use core::fmt::{Debug, Formatter, Result};
-use spin::Mutex;
 
 use lazy_static::lazy_static;
+use spin::Mutex;
 
 use super::addr::{align_down, align_up, VirtAddr};
 use super::paging::{MMUFlags, PageTable, VmMapper};

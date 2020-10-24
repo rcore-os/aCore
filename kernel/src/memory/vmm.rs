@@ -1,73 +1,28 @@
 //! Virtual memory management.
 
-#![allow(dead_code)]
-
 use alloc::collections::{btree_map::Entry, BTreeMap};
 use core::fmt::{Debug, Formatter, Result};
 
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use super::addr::{align_down, align_up, VirtAddr};
-use super::paging::{MMUFlags, PageTable, VmMapper};
+use super::addr::{align_down, align_up, virt_to_phys, VirtAddr};
+use super::areas::{PmAreaFixed, VmArea};
+use super::paging::{MMUFlags, PageTable};
 use crate::arch::memory::{ArchPageTable, PHYS_VIRT_OFFSET};
 use crate::error::{AcoreError, AcoreResult};
-
-/// A continuous virtual memory area with same flags.
-/// The `start` and `end` address are page aligned.
-#[derive(Debug)]
-pub struct VmArea {
-    pub(super) start: VirtAddr,
-    pub(super) end: VirtAddr,
-    pub(super) flags: MMUFlags,
-    name: &'static str,
-}
 
 /// A set of virtual memory areas with the associated page table.
 pub struct MemorySet<PT: PageTable = ArchPageTable> {
     areas: BTreeMap<usize, VmArea>,
-    mapper: VmMapper<PT>,
-}
-
-impl VmArea {
-    pub fn new(
-        start: VirtAddr,
-        end: VirtAddr,
-        flags: MMUFlags,
-        name: &'static str,
-    ) -> AcoreResult<Self> {
-        if start >= end {
-            warn!("invalid memory region: [{:#x?}, {:#x?})", start, end);
-            return Err(AcoreError::InvalidArgs);
-        }
-        Ok(Self {
-            start: align_down(start),
-            end: align_up(end),
-            flags,
-            name,
-        })
-    }
-
-    /// Test whether a virtual address is contained in the memory area
-    fn contains(&self, vaddr: VirtAddr) -> bool {
-        self.start <= vaddr && vaddr < self.end
-    }
-
-    /// Test whether this area is (page) overlap with region [`start`, `end`)
-    fn is_overlap_with(&self, start: VirtAddr, end: VirtAddr) -> bool {
-        let p0 = self.start;
-        let p1 = self.end;
-        let p2 = align_down(start);
-        let p3 = align_up(end);
-        !(p1 <= p2 || p0 >= p3)
-    }
+    pt: PT,
 }
 
 impl<PT: PageTable> MemorySet<PT> {
     pub fn new() -> Self {
         Self {
-            mapper: VmMapper { pgtable: PT::new() },
             areas: BTreeMap::new(),
+            pt: PT::new(),
         }
     }
 
@@ -104,7 +59,7 @@ impl<PT: PageTable> MemorySet<PT> {
             warn!("VMA overlap: {:#x?}\n{:#x?}", vma, self);
             return Err(AcoreError::InvalidArgs);
         }
-        self.mapper.map_area(&vma, vma.start - PHYS_VIRT_OFFSET);
+        vma.map_area(&mut self.pt)?;
         self.areas.insert(vma.start, vma);
         Ok(())
     }
@@ -119,7 +74,7 @@ impl<PT: PageTable> MemorySet<PT> {
         let end = align_up(end);
         if let Entry::Occupied(e) = self.areas.entry(start) {
             if e.get().end == end {
-                self.mapper.unmap_area(e.get());
+                e.get().unmap_area(&mut self.pt)?;
                 e.remove();
                 return Ok(());
             }
@@ -142,14 +97,14 @@ impl<PT: PageTable> MemorySet<PT> {
     /// Clear and unmap all areas.
     pub fn clear(&mut self) {
         for area in self.areas.values() {
-            self.mapper.unmap_area(area);
+            area.unmap_area(&mut self.pt).unwrap();
         }
         self.areas.clear();
     }
 
     /// Activate the associated page table.
     pub unsafe fn activate(&self) {
-        self.mapper.pgtable.set_current()
+        self.pt.set_current()
     }
 }
 
@@ -163,7 +118,7 @@ impl<PT: PageTable> Debug for MemorySet<PT> {
     fn fmt(&self, f: &mut Formatter) -> Result {
         f.debug_struct("MemorySet")
             .field("areas", &self.areas.values())
-            .field("page_table_root", &self.mapper.pgtable.root_paddr())
+            .field("page_table_root", &self.pt.root_paddr())
             .finish()
     }
 }
@@ -187,40 +142,46 @@ fn init_kernel_memory_set(ms: &mut MemorySet) -> AcoreResult {
         fn boot_stack_top();
     }
 
-    ms.push(VmArea::new(
-        stext as usize,
-        etext as usize,
+    ms.push(VmArea::from_fixed(
+        PmAreaFixed::new(virt_to_phys(stext as usize), virt_to_phys(etext as usize))?,
+        PHYS_VIRT_OFFSET,
         MMUFlags::READ | MMUFlags::EXECUTE,
         "ktext",
     )?)?;
-    ms.push(VmArea::new(
-        sdata as usize,
-        edata as usize,
+    ms.push(VmArea::from_fixed(
+        PmAreaFixed::new(virt_to_phys(sdata as usize), virt_to_phys(edata as usize))?,
+        PHYS_VIRT_OFFSET,
         MMUFlags::READ | MMUFlags::WRITE,
         "kdata",
     )?)?;
-    ms.push(VmArea::new(
-        srodata as usize,
-        erodata as usize,
+    ms.push(VmArea::from_fixed(
+        PmAreaFixed::new(
+            virt_to_phys(srodata as usize),
+            virt_to_phys(erodata as usize),
+        )?,
+        PHYS_VIRT_OFFSET,
         MMUFlags::READ,
         "krodata",
     )?)?;
-    ms.push(VmArea::new(
-        sbss as usize,
-        ebss as usize,
+    ms.push(VmArea::from_fixed(
+        PmAreaFixed::new(virt_to_phys(sbss as usize), virt_to_phys(ebss as usize))?,
+        PHYS_VIRT_OFFSET,
         MMUFlags::READ | MMUFlags::WRITE,
         "kbss",
     )?)?;
-    ms.push(VmArea::new(
-        boot_stack as usize,
-        boot_stack_top as usize,
+    ms.push(VmArea::from_fixed(
+        PmAreaFixed::new(
+            virt_to_phys(boot_stack as usize),
+            virt_to_phys(boot_stack_top as usize),
+        )?,
+        PHYS_VIRT_OFFSET,
         MMUFlags::READ | MMUFlags::WRITE,
         "kstack",
     )?)?;
     for region in crate::arch::memory::get_phys_memory_regions() {
-        ms.push(VmArea::new(
-            region.start + PHYS_VIRT_OFFSET,
-            region.end + PHYS_VIRT_OFFSET,
+        ms.push(VmArea::from_fixed(
+            PmAreaFixed::new(region.start, region.end)?,
+            PHYS_VIRT_OFFSET,
             MMUFlags::READ | MMUFlags::WRITE,
             "physical_memory",
         )?)?;

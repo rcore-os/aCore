@@ -71,6 +71,9 @@ impl PageTableEntry for PTE {
     fn flags(&self) -> MMUFlags {
         self.flags().into()
     }
+    fn is_present(&self) -> bool {
+        self.flags().contains(PTF::VALID)
+    }
     fn set_addr(&mut self, paddr: PhysAddr) {
         let frame = rv::Frame::of_addr(rv::PhysAddr::new(paddr));
         self.set(frame, self.flags())

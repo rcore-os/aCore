@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-
+#[allow(dead_code)]
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AcoreError {

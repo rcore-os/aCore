@@ -2,9 +2,7 @@
 
 use core::mem::ManuallyDrop;
 
-use super::addr::{is_aligned, PhysAddr, VirtAddr};
-use super::vmm::VmArea;
-use super::PAGE_SIZE;
+use super::{PhysAddr, VirtAddr};
 use crate::error::AcoreResult;
 
 bitflags! {
@@ -20,6 +18,7 @@ bitflags! {
 pub trait PageTableEntry {
     fn addr(&self) -> PhysAddr;
     fn flags(&self) -> MMUFlags;
+    fn is_present(&self) -> bool;
 
     fn set_addr(&mut self, paddr: PhysAddr);
     fn set_flags(&mut self, flags: MMUFlags);
@@ -85,39 +84,6 @@ pub trait PageTable: Sized {
         if new_root != old_root {
             Self::set_current_root_paddr(new_root);
             Self::flush_tlb(None);
-        }
-    }
-}
-
-pub(super) struct VmMapper<PT: PageTable> {
-    pub(super) pgtable: PT,
-}
-
-impl<PT: PageTable> VmMapper<PT> {
-    pub fn map_area(&mut self, vma: &VmArea, target: PhysAddr) {
-        trace!("create mapping: {:#x?} -> target {:#x?}", vma, target);
-        debug_assert!(is_aligned(target));
-        for vaddr in (vma.start..vma.end).step_by(PAGE_SIZE) {
-            let paddr = vaddr - vma.start + target;
-            self.pgtable
-                .map(vaddr, paddr, vma.flags)
-                .map_err(|e| {
-                    panic!(
-                        "failed to create mapping: {:#x?} -> {:#x?}, {:?}",
-                        vaddr, paddr, e
-                    )
-                })
-                .unwrap()
-        }
-    }
-
-    pub fn unmap_area(&mut self, vma: &VmArea) {
-        trace!("destory mapping: {:#x?}", vma);
-        for vaddr in (vma.start..vma.end).step_by(PAGE_SIZE) {
-            self.pgtable
-                .unmap(vaddr)
-                .map_err(|e| panic!("failed to unmap VA: {:#x?}, {:?}", vaddr, e))
-                .unwrap()
         }
     }
 }

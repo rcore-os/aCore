@@ -1,6 +1,9 @@
 //! Physical and virtual memory management.
 
+#![allow(dead_code)]
+
 pub mod addr;
+pub mod areas;
 mod frame;
 mod heap;
 mod paging;

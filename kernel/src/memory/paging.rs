@@ -47,6 +47,8 @@ pub trait PageTable: Sized {
 
     fn root_paddr(&self) -> PhysAddr;
 
+    fn map_kernel(&mut self);
+
     fn get_entry(&mut self, vaddr: VirtAddr) -> AcoreResult<&mut dyn PageTableEntry>;
 
     fn map(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: MMUFlags) -> AcoreResult {

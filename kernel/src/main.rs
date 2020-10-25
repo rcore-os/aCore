@@ -4,6 +4,7 @@
 #![feature(llvm_asm)]
 #![feature(global_asm)]
 #![feature(lang_items)]
+#![feature(arc_mutate_strong_count)]
 
 #[macro_use]
 extern crate log;
@@ -30,7 +31,7 @@ use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 #[no_mangle]
 pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
     static AP_CAN_INIT: AtomicBool = AtomicBool::new(false);
-    let cpu_id = arch::cpu::id();
+    let cpu_id = arch::boot_cpu_id();
     if cpu_id == consts::BOOTSTRAP_CPU_ID {
         memory::clear_bss();
         arch::primary_init_early(arg0, arg1);

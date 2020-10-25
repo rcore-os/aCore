@@ -53,17 +53,17 @@ impl PmAreaFixed {
 
 impl VmArea {
     pub fn from_fixed_pma(
-        start: PhysAddr,
-        end: PhysAddr,
+        start_paddr: PhysAddr,
+        end_paddr: PhysAddr,
         offset: usize,
         flags: MMUFlags,
         name: &'static str,
     ) -> AcoreResult<Self> {
         Self::new(
-            start + offset,
-            end + offset,
+            start_paddr + offset,
+            end_paddr + offset,
             flags,
-            Arc::new(Mutex::new(PmAreaFixed::new(start, end)?)),
+            Arc::new(Mutex::new(PmAreaFixed::new(start_paddr, end_paddr)?)),
             name,
         )
     }

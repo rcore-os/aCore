@@ -152,6 +152,15 @@ impl PageTable for RvPageTable {
         self.root.start_paddr()
     }
 
+    fn map_kernel(&mut self) {
+        let table = unsafe { &mut *(phys_to_virt(self.root.start_paddr()) as *mut PT) };
+        let kernel_table = unsafe { &mut *(phys_to_virt(Self::current_root_paddr()) as *mut PT) };
+        #[cfg(target_arch = "riscv64")] // [0xffff_ffff_8000_0000, 0xffff_ffff_ffff_ffff]
+        for i in 510..512 {
+            table[i].set(kernel_table[i].frame(), kernel_table[i].flags());
+        }
+    }
+
     fn get_entry(&mut self, vaddr: VirtAddr) -> AcoreResult<&mut dyn PageTableEntry> {
         let page = rv::Page::of_addr(rv::VirtAddr::new(vaddr));
         Ok(self.inner.ref_entry(page)?)

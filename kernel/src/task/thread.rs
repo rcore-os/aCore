@@ -6,8 +6,9 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use super::context::{handle_user_trap, ThreadContext};
-use crate::arch::context::ArchThreadContext;
+use crate::arch::context::{write_tls, ArchThreadContext};
 use crate::error::{AcoreError, AcoreResult};
+use crate::memory::addr::virt_to_phys;
 use crate::memory::areas::{PmAreaDelay, VmArea};
 use crate::memory::{MMUFlags, MemorySet, PAGE_SIZE, USER_STACK_OFFSET, USER_STACK_SIZE};
 use crate::utils::IdAllocator;
@@ -17,6 +18,7 @@ struct ThreadState {}
 
 pub struct Thread<C: ThreadContext = ArchThreadContext> {
     pub id: usize,
+    pub cpu: usize,
     vm: Arc<Mutex<MemorySet>>,
     context: Mutex<Option<Box<C>>>,
     state: Mutex<ThreadState>,
@@ -33,7 +35,8 @@ impl Thread {
     fn new() -> AcoreResult<Arc<Self>> {
         let t = Arc::new(Self {
             id: TID_ALLOCATOR.lock().alloc()?,
-            vm: Arc::new(Mutex::new(MemorySet::new())),
+            cpu: crate::arch::cpu::id(),
+            vm: Arc::new(Mutex::new(MemorySet::new_user())),
             context: Mutex::new(None),
             state: Mutex::new(ThreadState {}),
         });
@@ -45,7 +48,11 @@ impl Thread {
         THREAD_POOL.lock().remove(&tid);
     }
 
-    pub fn new_kernel(entry: fn(usize) -> !, arg: usize) -> AcoreResult<Arc<Self>> {
+    pub fn tls_ptr(self: &Arc<Self>) -> usize {
+        Arc::as_ptr(self) as usize
+    }
+
+    pub fn new_user(entry: fn(usize) -> !, arg: usize) -> AcoreResult<Arc<Self>> {
         extern "C" {
             fn boot_stack_top();
         }
@@ -58,22 +65,40 @@ impl Thread {
         let stack = VmArea::new(
             stack_bottom,
             stack_top,
-            MMUFlags::READ | MMUFlags::WRITE,
+            MMUFlags::READ | MMUFlags::WRITE | MMUFlags::USER,
             Arc::new(Mutex::new(pma)),
             "stack",
         )?;
         th.vm.lock().push(stack)?;
 
-        let ctx = ArchThreadContext::new(entry as usize, arg, stack_top, false); // TODO: kernel statck
+        // test text segment
+        let text_start_paddr = virt_to_phys(entry as usize);
+        let text_end_paddr = text_start_paddr + PAGE_SIZE;
+        let text = VmArea::from_fixed_pma(
+            text_start_paddr,
+            text_end_paddr,
+            0,
+            MMUFlags::READ | MMUFlags::EXECUTE | MMUFlags::USER,
+            "text",
+        )?;
+        th.vm.lock().push(text)?;
+
+        let ctx = ArchThreadContext::new(virt_to_phys(entry as usize), arg, stack_top, true);
         *th.context.lock() = Some(Box::from(ctx));
+        debug!("new user thread: {:#x?}", th);
         Ok(th)
     }
 
     pub fn run(self: &Arc<Self>) -> AcoreResult {
+        unsafe {
+            write_tls(self.tls_ptr());
+            self.vm.lock().activate();
+        }
         loop {
             let mut ctx = self.context.lock().take().ok_or(AcoreError::BadState)?;
             let trap = ctx.run();
             handle_user_trap(self, trap, &mut ctx)?;
+            ctx.end_trap(trap);
             *self.context.lock() = Some(ctx);
         }
     }
@@ -83,6 +108,7 @@ impl<C: ThreadContext> Debug for Thread<C> {
     fn fmt(&self, f: &mut Formatter) -> Result {
         f.debug_struct("Thread")
             .field("id", &self.id)
+            .field("cpu", &self.cpu)
             .field("vm", &self.vm.lock())
             .field("context", &self.context.lock())
             .field("state", &self.state.lock())

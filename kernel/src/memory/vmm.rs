@@ -19,10 +19,19 @@ pub struct MemorySet<PT: PageTable = ArchPageTable> {
 }
 
 impl<PT: PageTable> MemorySet<PT> {
-    pub fn new() -> Self {
+    pub fn new_kernel() -> Self {
         Self {
             areas: BTreeMap::new(),
             pt: PT::new(),
+        }
+    }
+
+    pub fn new_user() -> Self {
+        let mut pt = PT::new();
+        pt.map_kernel();
+        Self {
+            areas: BTreeMap::new(),
+            pt,
         }
     }
 
@@ -110,6 +119,7 @@ impl<PT: PageTable> MemorySet<PT> {
 
 impl<PT: PageTable> Drop for MemorySet<PT> {
     fn drop(&mut self) {
+        debug!("{:?} dropped", self);
         self.clear()
     }
 }
@@ -124,7 +134,7 @@ impl<PT: PageTable> Debug for MemorySet<PT> {
 }
 
 lazy_static! {
-    pub static ref KERNEL_MEMORY_SET: Mutex<MemorySet> = Mutex::new(MemorySet::new());
+    pub static ref KERNEL_MEMORY_SET: Mutex<MemorySet> = Mutex::new(MemorySet::new_kernel());
 }
 
 /// Re-build a fine-grained kernel page table, push memory segments to kernel memory set.

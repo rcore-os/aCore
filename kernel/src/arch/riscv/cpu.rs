@@ -1,5 +1,8 @@
 pub fn id() -> usize {
-    let mut cpu_id;
-    unsafe { asm!("mv {0}, tp", out(reg) cpu_id) };
-    cpu_id
+    let boot_id = super::boot_cpu_id();
+    if boot_id < crate::consts::MAX_CPU_NUM {
+        boot_id
+    } else {
+        crate::task::current().cpu
+    }
 }

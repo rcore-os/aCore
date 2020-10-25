@@ -1,5 +1,9 @@
+mod cont;
+mod delay;
 mod fixed;
 
+pub use cont::PmAreaContiguous;
+pub use delay::PmAreaDelay;
 pub use fixed::PmAreaFixed;
 
 use alloc::sync::Arc;
@@ -16,9 +20,9 @@ use crate::error::{AcoreError, AcoreResult};
 pub trait PmArea: core::fmt::Debug + Send + Sync {
     /// Size of total physical memory.
     fn size(&self) -> usize;
-    /// Get the start address of the physical frame relative to the offset, may perform allocation.
+    /// Get the start address of a 4KB physical frame relative to the offset, may perform allocation.
     fn get_frame(&mut self, offset: usize, need_alloc: bool) -> AcoreResult<Option<PhysAddr>>;
-    /// Release the given physical frame, may perform deallocation.
+    /// Release the given 4KB physical frame, may perform deallocation.
     fn release_frame(&mut self, offset: usize) -> AcoreResult;
 }
 

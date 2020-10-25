@@ -1,7 +1,6 @@
 //! Definition of phyical and virtual addresses.
 
-use super::PAGE_SIZE;
-use crate::arch::memory::PHYS_VIRT_OFFSET;
+use super::{PAGE_SIZE, PHYS_VIRT_OFFSET};
 
 pub type VirtAddr = usize;
 pub type PhysAddr = usize;
@@ -24,4 +23,8 @@ pub fn align_up(addr: usize) -> usize {
 
 pub fn is_aligned(addr: usize) -> bool {
     addr & (PAGE_SIZE - 1) == 0
+}
+
+pub fn page_count(size: usize) -> usize {
+    align_up(size) / PAGE_SIZE
 }

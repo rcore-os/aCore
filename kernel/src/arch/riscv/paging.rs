@@ -7,10 +7,9 @@ use riscv::paging::{
 };
 use riscv::register::satp;
 
-use crate::arch::memory::PHYS_VIRT_OFFSET;
 use crate::error::{AcoreError, AcoreResult};
 use crate::memory::{addr::phys_to_virt, Frame, PhysAddr, VirtAddr};
-use crate::memory::{MMUFlags, PageTable, PageTableEntry};
+use crate::memory::{MMUFlags, PageTable, PageTableEntry, PHYS_VIRT_OFFSET};
 
 mod rv {
     pub use riscv::addr::{Frame, Page, PhysAddr, VirtAddr};
@@ -200,10 +199,12 @@ impl PageTableFrameAllocator {
 
 impl FrameAllocator for PageTableFrameAllocator {
     fn alloc(&mut self) -> Option<rv::Frame> {
-        Frame::new().map(|f| {
-            let ret = rv::Frame::of_addr(rv::PhysAddr::new(f.start_paddr()));
-            self.frames.push(f);
-            ret
-        })
+        Frame::new()
+            .map(|f| {
+                let ret = rv::Frame::of_addr(rv::PhysAddr::new(f.start_paddr()));
+                self.frames.push(f);
+                ret
+            })
+            .ok()
     }
 }

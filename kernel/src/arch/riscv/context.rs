@@ -2,6 +2,7 @@ use trapframe::UserContext;
 
 use riscv::register::scause::{self, Exception as E, Interrupt as I, Trap};
 
+use crate::memory::MMUFlags;
 use crate::task::context::{ThreadContext, TrapKind};
 
 #[derive(Debug)]
@@ -44,9 +45,15 @@ impl ThreadContext for ArchThreadContext {
         match scause.cause() {
             Trap::Interrupt(I::SupervisorTimer) => TrapKind::Timer,
             Trap::Exception(E::UserEnvCall) => TrapKind::Syscall,
-            Trap::Exception(E::InstructionPageFault)
-            | Trap::Exception(E::LoadPageFault)
-            | Trap::Exception(E::StorePageFault) => TrapKind::PageFault,
+            Trap::Exception(E::InstructionPageFault) => {
+                TrapKind::PageFault(MMUFlags::USER | MMUFlags::EXECUTE)
+            }
+            Trap::Exception(E::LoadPageFault) => {
+                TrapKind::PageFault(MMUFlags::USER | MMUFlags::READ)
+            }
+            Trap::Exception(E::StorePageFault) => {
+                TrapKind::PageFault(MMUFlags::USER | MMUFlags::WRITE)
+            }
             _ => TrapKind::Unknown(scause.bits()),
         }
     }

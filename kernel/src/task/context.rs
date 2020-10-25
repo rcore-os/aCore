@@ -3,6 +3,7 @@ use alloc::sync::Arc;
 
 use super::thread::Thread;
 use crate::error::AcoreResult;
+use crate::memory::MMUFlags;
 
 pub trait ThreadContext: core::fmt::Debug + Send + Sync {
     /// Create a new context and set entry pointer, stack point, etc.
@@ -32,8 +33,8 @@ pub trait ThreadContext: core::fmt::Debug + Send + Sync {
 pub enum TrapKind {
     Syscall,
     Timer,
-    PageFault,
-    Irq,
+    PageFault(MMUFlags),
+    Irq(usize),
     Unknown(usize),
 }
 

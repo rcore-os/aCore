@@ -5,8 +5,9 @@ use core::mem::ManuallyDrop;
 
 use spin::Mutex;
 
-use super::{PhysAddr, PAGE_SIZE};
-use crate::arch::memory::{FrameAlloc, PHYS_MEMORY_OFFSET};
+use super::{PhysAddr, PAGE_SIZE, PHYS_MEMORY_OFFSET};
+use crate::arch::memory::FrameAlloc;
+use crate::error::{AcoreError, AcoreResult};
 
 static FRAME_ALLOCATOR: Mutex<FrameAlloc> = Mutex::new(FrameAlloc::DEFAULT);
 
@@ -88,22 +89,26 @@ pub struct Frame {
 
 impl Frame {
     /// Allocate one physical frame.
-    pub fn new() -> Option<Self> {
+    pub fn new() -> AcoreResult<Self> {
         unsafe {
-            alloc_frame().map(|start_paddr| Self {
-                start_paddr,
-                frame_count: 1,
-            })
+            alloc_frame()
+                .map(|start_paddr| Self {
+                    start_paddr,
+                    frame_count: 1,
+                })
+                .ok_or(AcoreError::NoMemory)
         }
     }
 
     /// Allocate contiguous physical frames.
-    pub fn new_contiguous(frame_count: usize, align_log2: usize) -> Option<Self> {
+    pub fn new_contiguous(frame_count: usize, align_log2: usize) -> AcoreResult<Self> {
         unsafe {
-            alloc_frame_contiguous(frame_count, align_log2).map(|start_paddr| Self {
-                start_paddr,
-                frame_count,
-            })
+            alloc_frame_contiguous(frame_count, align_log2)
+                .map(|start_paddr| Self {
+                    start_paddr,
+                    frame_count,
+                })
+                .ok_or(AcoreError::NoMemory)
         }
     }
 

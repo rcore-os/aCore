@@ -21,6 +21,13 @@ impl PmArea for PmAreaFixed {
         self.end - self.start
     }
     fn get_frame(&mut self, offset: usize, _need_alloc: bool) -> AcoreResult<Option<PhysAddr>> {
+        if offset >= self.size() {
+            warn!(
+                "out of range in PmAreaFixed::get_frame(): offset={:#x?}, {:#x?}",
+                offset, self
+            );
+            return Err(AcoreError::OutOfRange);
+        }
         Ok(Some(align_down(self.start + offset)))
     }
     fn release_frame(&mut self, _offset: usize) -> AcoreResult {
@@ -31,7 +38,10 @@ impl PmArea for PmAreaFixed {
 impl PmAreaFixed {
     pub fn new(start: PhysAddr, end: PhysAddr) -> AcoreResult<Self> {
         if start >= end {
-            warn!("invalid memory region: [{:#x?}, {:#x?})", start, end);
+            warn!(
+                "invalid memory region in PmAreaFixed::new(): [{:#x?}, {:#x?})",
+                start, end
+            );
             return Err(AcoreError::InvalidArgs);
         }
         Ok(Self {
@@ -43,16 +53,17 @@ impl PmAreaFixed {
 
 impl VmArea {
     pub fn from_fixed_pma(
-        pma: PmAreaFixed,
+        start: PhysAddr,
+        end: PhysAddr,
         offset: usize,
         flags: MMUFlags,
         name: &'static str,
     ) -> AcoreResult<Self> {
         Self::new(
-            pma.start + offset,
-            pma.end + offset,
+            start + offset,
+            end + offset,
             flags,
-            Arc::new(Mutex::new(pma)),
+            Arc::new(Mutex::new(PmAreaFixed::new(start, end)?)),
             name,
         )
     }

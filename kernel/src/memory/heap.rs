@@ -2,7 +2,7 @@
 
 use buddy_system_allocator::LockedHeap;
 
-use crate::arch::memory::KERNEL_HEAP_SIZE;
+use super::KERNEL_HEAP_SIZE;
 
 #[global_allocator]
 static HEAP_ALLOCATOR: LockedHeap = LockedHeap::new();

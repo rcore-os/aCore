@@ -8,7 +8,8 @@ use spin::Mutex;
 use super::context::{handle_user_trap, ThreadContext};
 use crate::arch::context::ArchThreadContext;
 use crate::error::{AcoreError, AcoreResult};
-use crate::memory::MemorySet;
+use crate::memory::areas::{PmAreaDelay, VmArea};
+use crate::memory::{MMUFlags, MemorySet, PAGE_SIZE, USER_STACK_OFFSET, USER_STACK_SIZE};
 use crate::utils::IdAllocator;
 
 #[derive(Debug)]
@@ -48,10 +49,24 @@ impl Thread {
         extern "C" {
             fn boot_stack_top();
         }
-        let t = Self::new()?;
-        let ctx = ArchThreadContext::new(entry as usize, arg, boot_stack_top as usize, false); // TODO: kernel statck
-        *t.context.lock() = Some(Box::from(ctx));
-        Ok(t)
+        let th = Self::new()?;
+
+        let stack_bottom = USER_STACK_OFFSET;
+        let stack_top = stack_bottom + USER_STACK_SIZE;
+        let mut pma = PmAreaDelay::new(USER_STACK_SIZE)?;
+        pma.pre_alloc(USER_STACK_SIZE - PAGE_SIZE, PAGE_SIZE)?;
+        let stack = VmArea::new(
+            stack_bottom,
+            stack_top,
+            MMUFlags::READ | MMUFlags::WRITE,
+            Arc::new(Mutex::new(pma)),
+            "stack",
+        )?;
+        th.vm.lock().push(stack)?;
+
+        let ctx = ArchThreadContext::new(entry as usize, arg, stack_top, false); // TODO: kernel statck
+        *th.context.lock() = Some(Box::from(ctx));
+        Ok(th)
     }
 
     pub fn run(self: &Arc<Self>) -> AcoreResult {

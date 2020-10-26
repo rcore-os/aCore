@@ -57,6 +57,7 @@ pub fn normal_main() -> ! {
     info!("Hello, normal CPU!");
     unsafe { trapframe::init() };
     crate::task::init();
+    info!("END");
     loop {}
 }
 

@@ -21,20 +21,16 @@ impl PmArea for PmAreaDelay {
     }
     fn get_frame(&mut self, offset: usize, need_alloc: bool) -> AcoreResult<Option<PhysAddr>> {
         let idx = offset / PAGE_SIZE;
-        if idx >= self.frames.len() {
-            warn!(
-                "out of range in PmAreaDelay::get_frame(): offset={:#x?}, {:#x?}",
-                offset, self
-            );
-            return Err(AcoreError::OutOfRange);
-        }
+        debug_assert!(idx < self.frames.len());
         if need_alloc {
             self.frames[idx] = Some(Frame::new()?);
         }
         Ok(self.frames[idx].as_ref().map(|f| f.start_paddr()))
     }
     fn release_frame(&mut self, offset: usize) -> AcoreResult {
-        self.frames[offset / PAGE_SIZE].take();
+        self.frames[offset / PAGE_SIZE]
+            .take()
+            .ok_or(AcoreError::NotFound)?;
         Ok(())
     }
 }
@@ -63,7 +59,10 @@ impl PmAreaDelay {
 
     pub fn pre_alloc(&mut self, offset: usize, size: usize) -> AcoreResult {
         if !is_aligned(offset) {
-            warn!("invalid offset {:#x?} in PmAreaDelay::pre_alloc()", offset);
+            warn!(
+                "offset not aligned in PmAreaDelay::pre_alloc(): {:#x?}",
+                offset
+            );
             return Err(AcoreError::InvalidArgs);
         }
         let count = page_count(size);

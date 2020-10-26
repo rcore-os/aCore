@@ -103,6 +103,16 @@ impl<PT: PageTable> MemorySet<PT> {
         }
     }
 
+    /// Handle page fault.
+    pub fn handle_page_fault(&mut self, vaddr: VirtAddr, access_flags: MMUFlags) -> AcoreResult {
+        if let Some((_, area)) = self.areas.range(..=vaddr).last() {
+            if area.contains(vaddr) {
+                return area.handle_page_fault(vaddr - area.start, access_flags, &mut self.pt);
+            }
+        }
+        Err(AcoreError::NotFound)
+    }
+
     /// Clear and unmap all areas.
     pub fn clear(&mut self) {
         for area in self.areas.values() {
@@ -119,7 +129,6 @@ impl<PT: PageTable> MemorySet<PT> {
 
 impl<PT: PageTable> Drop for MemorySet<PT> {
     fn drop(&mut self) {
-        debug!("{:?} dropped", self);
         self.clear()
     }
 }

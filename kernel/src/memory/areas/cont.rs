@@ -20,13 +20,7 @@ impl PmArea for PmAreaContiguous {
         self.frame.size()
     }
     fn get_frame(&mut self, offset: usize, _need_alloc: bool) -> AcoreResult<Option<PhysAddr>> {
-        if offset >= self.size() {
-            warn!(
-                "out of range in PmAreaContiguous::get_frame(): offset={:#x?}, {:#x?}",
-                offset, self
-            );
-            return Err(AcoreError::OutOfRange);
-        }
+        debug_assert!(offset < self.size());
         Ok(Some(align_down(self.frame.start_paddr() + offset)))
     }
     fn release_frame(&mut self, _offset: usize) -> AcoreResult {

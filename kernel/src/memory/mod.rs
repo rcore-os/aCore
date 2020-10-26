@@ -32,7 +32,11 @@ pub fn clear_bss() {
 
 pub fn handle_page_fault(vaddr: VirtAddr, access_flags: MMUFlags) {
     debug!("Page Fault @ {:#x} when {:?}", vaddr, access_flags);
-    info!("{:#x?}", crate::task::current());
+    crate::task::current()
+        .vm
+        .lock()
+        .handle_page_fault(vaddr, access_flags)
+        .unwrap(); // TODO: exit thread
 }
 
 pub fn init() {

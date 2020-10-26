@@ -19,7 +19,7 @@ struct ThreadState {}
 pub struct Thread<C: ThreadContext = ArchThreadContext> {
     pub id: usize,
     pub cpu: usize,
-    vm: Arc<Mutex<MemorySet>>,
+    pub vm: Arc<Mutex<MemorySet>>,
     context: Mutex<Option<Box<C>>>,
     state: Mutex<ThreadState>,
 }
@@ -57,8 +57,7 @@ impl Thread {
 
         let stack_bottom = USER_STACK_OFFSET;
         let stack_top = stack_bottom + USER_STACK_SIZE;
-        let mut pma = PmAreaDelay::new(USER_STACK_SIZE)?;
-        pma.pre_alloc(USER_STACK_SIZE - PAGE_SIZE, PAGE_SIZE)?;
+        let pma = PmAreaDelay::new(USER_STACK_SIZE)?;
         let stack = VmArea::new(
             stack_bottom,
             stack_top,
@@ -91,19 +90,21 @@ impl Thread {
             write_tls(self.tls_ptr());
             self.vm.lock().activate();
         }
-        loop {
+        // FIXME
+        for _ in 0..10 {
             let mut ctx = self.context.lock().take().ok_or(AcoreError::BadState)?;
             let trap = ctx.run();
             handle_user_trap(self, trap, &mut ctx)?;
             ctx.end_trap(trap);
             *self.context.lock() = Some(ctx);
         }
+        Ok(())
     }
 }
 
 impl<C: ThreadContext> Drop for Thread<C> {
     fn drop(&mut self) {
-        debug!("Thread {} dropped", self.id);
+        debug!("drop thread: {:#x?}", self);
         TID_ALLOCATOR.lock().dealloc(self.id);
     }
 }

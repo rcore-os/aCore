@@ -27,6 +27,6 @@ pub fn get_phys_memory_regions() -> Vec<Range<usize>> {
     vec![start..end]
 }
 
-pub fn create_mapping(_ms: &mut MemorySet) -> AcoreResult {
+pub fn create_mapping(_ms: &MemorySet) -> AcoreResult {
     Ok(())
 }

@@ -100,11 +100,16 @@ impl VmArea {
         trace!("destory mapping: {:#x?}", self);
         let mut pma = self.pma.lock();
         for vaddr in (self.start..self.end).step_by(PAGE_SIZE) {
-            pma.release_frame(vaddr - self.start)?;
-            pt.unmap(vaddr).map_err(|e| {
-                error!("failed to unmap VA: {:#x?}, {:?}", vaddr, e);
-                e
-            })?;
+            let res = pma.release_frame(vaddr - self.start);
+            if res != Err(AcoreError::NotFound) {
+                if res.is_err() {
+                    return res;
+                }
+                pt.unmap(vaddr).map_err(|e| {
+                    error!("failed to unmap VA: {:#x?}, {:?}", vaddr, e);
+                    e
+                })?;
+            }
         }
         Ok(())
     }
@@ -117,6 +122,12 @@ impl VmArea {
         pt: &mut impl PageTable,
     ) -> AcoreResult {
         debug_assert!(offset < self.end - self.start);
+        trace!(
+            "handle page fault @ {:#x?} when {:?}: {:#x?}",
+            offset,
+            access_flags,
+            self
+        );
         let mut pma = self.pma.lock();
         if !self.flags.contains(access_flags) {
             return Err(AcoreError::AccessDenied);
@@ -124,7 +135,14 @@ impl VmArea {
         let offset = align_down(offset);
         let vaddr = self.start + offset;
         let paddr = pma.get_frame(offset, true)?.ok_or(AcoreError::NoMemory)?;
-        pt.map(vaddr, paddr, self.flags)?;
-        Ok(())
+
+        let entry = pt.get_entry(vaddr)?;
+        if entry.is_present() {
+            Err(AcoreError::AlreadyExists)
+        } else {
+            entry.set_addr(paddr);
+            entry.set_flags(self.flags);
+            Ok(())
+        }
     }
 }

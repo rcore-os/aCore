@@ -20,6 +20,7 @@ pub fn init() {
 
 pub fn spawn(thread: Arc<Thread>) {
     thread.run().unwrap();
+    Thread::exit(thread.id);
 }
 
 pub fn current<'a>() -> &'a Thread {

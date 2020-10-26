@@ -21,13 +21,7 @@ impl PmArea for PmAreaFixed {
         self.end - self.start
     }
     fn get_frame(&mut self, offset: usize, _need_alloc: bool) -> AcoreResult<Option<PhysAddr>> {
-        if offset >= self.size() {
-            warn!(
-                "out of range in PmAreaFixed::get_frame(): offset={:#x?}, {:#x?}",
-                offset, self
-            );
-            return Err(AcoreError::OutOfRange);
-        }
+        debug_assert!(offset < self.size());
         Ok(Some(align_down(self.start + offset)))
     }
     fn release_frame(&mut self, _offset: usize) -> AcoreResult {

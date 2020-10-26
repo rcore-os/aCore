@@ -27,6 +27,9 @@ pub struct RvPageTable {
 
 impl From<MMUFlags> for PTF {
     fn from(f: MMUFlags) -> Self {
+        if f.is_empty() {
+            return PTF::empty();
+        }
         let mut ret = PTF::VALID;
         if f.contains(MMUFlags::READ) {
             ret |= PTF::READABLE;

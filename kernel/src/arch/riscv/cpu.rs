@@ -6,3 +6,7 @@ pub fn id() -> usize {
         crate::task::current().cpu
     }
 }
+
+pub fn wait_for_interrupt() {
+    unsafe { riscv::asm::wfi() }
+}

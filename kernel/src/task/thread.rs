@@ -5,15 +5,18 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use super::context::{handle_user_trap, ThreadContext};
-use crate::arch::context::{write_tls, ArchThreadContext};
+use crate::arch::context::ArchThreadContext;
 use crate::error::{AcoreError, AcoreResult};
 use crate::memory::addr::virt_to_phys;
 use crate::memory::areas::{PmAreaDelay, VmArea};
 use crate::memory::{MMUFlags, MemorySet, PAGE_SIZE, USER_STACK_OFFSET, USER_STACK_SIZE};
 use crate::utils::IdAllocator;
 
-#[derive(Debug)]
-struct ThreadState {}
+#[derive(Debug, Default)]
+struct ThreadState {
+    need_sched: bool,
+    exited: bool,
+}
 
 #[derive(Debug)]
 pub struct Thread<C: ThreadContext = ArchThreadContext> {
@@ -38,14 +41,18 @@ impl Thread {
             cpu: crate::arch::cpu::id(),
             vm: Arc::new(Mutex::new(MemorySet::new_user())),
             context: Mutex::new(None),
-            state: Mutex::new(ThreadState {}),
+            state: Mutex::new(ThreadState::default()),
         });
         THREAD_POOL.lock().insert(t.id, t.clone());
         Ok(t)
     }
 
-    pub fn exit(tid: usize) {
+    pub fn exit_by_id(tid: usize) {
         THREAD_POOL.lock().remove(&tid);
+    }
+
+    pub fn exit(&self) {
+        Self::exit_by_id(self.id)
     }
 
     pub fn tls_ptr(self: &Arc<Self>) -> usize {
@@ -85,11 +92,7 @@ impl Thread {
         Ok(th)
     }
 
-    pub fn run(self: &Arc<Self>) -> AcoreResult {
-        unsafe {
-            write_tls(self.tls_ptr());
-            self.vm.lock().activate();
-        }
+    pub async fn run(self: &Arc<Self>) -> AcoreResult {
         // FIXME
         for _ in 0..10 {
             let mut ctx = self.context.lock().take().ok_or(AcoreError::BadState)?;
@@ -97,6 +100,11 @@ impl Thread {
             handle_user_trap(self, trap, &mut ctx)?;
             ctx.end_trap(trap);
             *self.context.lock() = Some(ctx);
+
+            let state = self.state.lock();
+            if state.exited {
+                break;
+            }
         }
         Ok(())
     }

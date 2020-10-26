@@ -5,7 +5,7 @@ use riscv::register::{
 use trapframe::UserContext;
 
 use crate::memory::MMUFlags;
-use crate::task::context::{ThreadContext, TrapReason};
+use crate::task::{ThreadContext, TrapReason};
 
 #[derive(Debug)]
 pub struct ArchThreadContext {

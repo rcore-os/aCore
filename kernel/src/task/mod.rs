@@ -1,31 +1,45 @@
 #![allow(dead_code)]
 
-pub mod context;
-pub mod thread;
+mod context;
+mod future;
+mod thread;
 
 use alloc::sync::Arc;
 
 use crate::error::AcoreResult;
-use thread::Thread;
+use crate::sched::executor;
+use future::ThreadRunnerFuture;
 
-fn test_new_thread() -> AcoreResult {
-    let t = Thread::new_user(test_user_thread, 2333)?;
-    spawn(t);
-    Ok(())
+pub use context::{ThreadContext, TrapReason};
+pub use thread::Thread;
+
+pub fn current<'a>() -> &'a Thread {
+    let ptr = crate::arch::context::read_tls() as *const Thread;
+    unsafe { &*ptr }
+}
+
+pub fn spawn(thread: Arc<Thread>) {
+    executor::spawn(ThreadRunnerFuture::new(thread));
 }
 
 pub fn init() {
     test_new_thread().unwrap();
 }
 
-pub fn spawn(thread: Arc<Thread>) {
-    thread.run().unwrap();
-    Thread::exit(thread.id);
+pub fn run_forever() -> ! {
+    loop {
+        executor::run_until_idle();
+        info!("IDLE");
+        crate::arch::cpu::wait_for_interrupt();
+    }
 }
 
-pub fn current<'a>() -> &'a Thread {
-    let ptr = crate::arch::context::read_tls() as *const Thread;
-    unsafe { &*ptr }
+fn test_new_thread() -> AcoreResult {
+    let t = Thread::new_user(test_user_thread, 2333)?;
+    spawn(t);
+    let t = Thread::new_user(test_user_thread, 3332)?;
+    spawn(t);
+    Ok(())
 }
 
 fn test_user_thread(arg: usize) -> ! {

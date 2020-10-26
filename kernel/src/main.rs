@@ -18,6 +18,7 @@ mod lang;
 #[macro_use]
 mod logging;
 mod memory;
+mod sched;
 mod task;
 mod utils;
 
@@ -36,6 +37,7 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
         arch::primary_init_early(arg0, arg1);
         logging::init();
         memory::init();
+        unsafe { trapframe::init() };
         arch::primary_init(arg0, arg1);
         AP_CAN_INIT.store(true, Ordering::Relaxed);
     } else {
@@ -43,6 +45,7 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
             spin_loop_hint();
         }
         memory::secondary_init();
+        unsafe { trapframe::init() };
         arch::secondary_init(arg0, arg1);
     }
     println!("Hello, CPU {}!", cpu_id);
@@ -55,10 +58,8 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
 
 pub fn normal_main() -> ! {
     info!("Hello, normal CPU!");
-    unsafe { trapframe::init() };
-    crate::task::init();
-    info!("END");
-    loop {}
+    task::init();
+    task::run_forever();
 }
 
 pub fn io_main() -> ! {

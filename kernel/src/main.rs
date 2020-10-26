@@ -4,7 +4,6 @@
 #![feature(llvm_asm)]
 #![feature(global_asm)]
 #![feature(lang_items)]
-#![feature(arc_mutate_strong_count)]
 
 #[macro_use]
 extern crate log;

@@ -28,14 +28,14 @@ pub trait ThreadContext: core::fmt::Debug + Send + Sync {
     ///
     /// On return, the context will be reset to the status before the trap.
     /// Trap reason and error code will be returned.
-    fn run(&mut self) -> TrapKind;
+    fn run(&mut self) -> TrapReason;
 
     /// Do something at the end of the trap, such as increasing PC.
-    fn end_trap(&mut self, trap: TrapKind);
+    fn end_trap(&mut self, trap: TrapReason);
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum TrapKind {
+pub enum TrapReason {
     Syscall,
     Timer,
     PageFault(usize, MMUFlags),
@@ -45,13 +45,13 @@ pub enum TrapKind {
 
 pub fn handle_user_trap<C: ThreadContext>(
     _thread: &Arc<Thread<C>>,
-    trap: TrapKind,
+    trap: TrapReason,
     ctx: &mut C,
 ) -> AcoreResult {
     trace!("handle trap from user: {:#x?} {:#x?}", trap, ctx);
     match trap {
-        TrapKind::Syscall => handle_syscall(ctx),
-        TrapKind::PageFault(addr, access_flags) => handle_page_fault(addr, access_flags),
+        TrapReason::Syscall => handle_syscall(ctx),
+        TrapReason::PageFault(addr, access_flags) => handle_page_fault(addr, access_flags),
         _ => error!("unhandled trap from user: {:#x?}", trap),
     }
     trace!("user trap end");

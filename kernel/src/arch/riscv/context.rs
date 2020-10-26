@@ -5,7 +5,7 @@ use riscv::register::{
 use trapframe::UserContext;
 
 use crate::memory::MMUFlags;
-use crate::task::context::{ThreadContext, TrapKind};
+use crate::task::context::{ThreadContext, TrapReason};
 
 #[derive(Debug)]
 pub struct ArchThreadContext {
@@ -45,30 +45,29 @@ impl ThreadContext for ArchThreadContext {
         self.user.set_tls(tls)
     }
 
-    fn run(&mut self) -> TrapKind {
+    fn run(&mut self) -> TrapReason {
         self.user.run();
         let scause = scause::read();
         let stval = stval::read();
         match scause.cause() {
-            Trap::Interrupt(I::SupervisorTimer) => TrapKind::Timer,
-            Trap::Exception(E::UserEnvCall) => TrapKind::Syscall,
+            Trap::Interrupt(I::SupervisorTimer) => TrapReason::Timer,
+            Trap::Exception(E::UserEnvCall) => TrapReason::Syscall,
             Trap::Exception(E::InstructionPageFault) => {
-                TrapKind::PageFault(stval, MMUFlags::USER | MMUFlags::EXECUTE)
+                TrapReason::PageFault(stval, MMUFlags::USER | MMUFlags::EXECUTE)
             }
             Trap::Exception(E::LoadPageFault) => {
-                TrapKind::PageFault(stval, MMUFlags::USER | MMUFlags::READ)
+                TrapReason::PageFault(stval, MMUFlags::USER | MMUFlags::READ)
             }
             Trap::Exception(E::StorePageFault) => {
-                TrapKind::PageFault(stval, MMUFlags::USER | MMUFlags::WRITE)
+                TrapReason::PageFault(stval, MMUFlags::USER | MMUFlags::WRITE)
             }
-            _ => TrapKind::Unknown(scause.bits()),
+            _ => TrapReason::Unknown(scause.bits()),
         }
     }
 
-    fn end_trap(&mut self, trap: TrapKind) {
-        match trap {
-            TrapKind::Syscall => self.user.sepc += 4,
-            _ => {}
+    fn end_trap(&mut self, trap: TrapReason) {
+        if let TrapReason::Syscall = trap {
+            self.user.sepc += 4;
         }
     }
 }

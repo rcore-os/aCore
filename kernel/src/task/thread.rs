@@ -1,6 +1,5 @@
 use alloc::collections::BTreeMap;
 use alloc::{boxed::Box, sync::Arc};
-use core::fmt::{Debug, Formatter, Result};
 
 use lazy_static::lazy_static;
 use spin::Mutex;
@@ -16,6 +15,7 @@ use crate::utils::IdAllocator;
 #[derive(Debug)]
 struct ThreadState {}
 
+#[derive(Debug)]
 pub struct Thread<C: ThreadContext = ArchThreadContext> {
     pub id: usize,
     pub cpu: usize,
@@ -53,9 +53,6 @@ impl Thread {
     }
 
     pub fn new_user(entry: fn(usize) -> !, arg: usize) -> AcoreResult<Arc<Self>> {
-        extern "C" {
-            fn boot_stack_top();
-        }
         let th = Self::new()?;
 
         let stack_bottom = USER_STACK_OFFSET;
@@ -101,18 +98,6 @@ impl Thread {
             ctx.end_trap(trap);
             *self.context.lock() = Some(ctx);
         }
-    }
-}
-
-impl<C: ThreadContext> Debug for Thread<C> {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        f.debug_struct("Thread")
-            .field("id", &self.id)
-            .field("cpu", &self.cpu)
-            .field("vm", &self.vm.lock())
-            .field("context", &self.context.lock())
-            .field("state", &self.state.lock())
-            .finish()
     }
 }
 

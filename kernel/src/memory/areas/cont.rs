@@ -9,7 +9,7 @@ use crate::memory::{
     Frame, MMUFlags, PhysAddr, VirtAddr,
 };
 
-/// A contiguous PMA which has been allocated in construction.
+/// A contiguous PMA allocated at construction.
 #[derive(Debug)]
 pub struct PmAreaContiguous {
     frame: Frame,

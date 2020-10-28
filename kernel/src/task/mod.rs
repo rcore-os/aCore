@@ -1,14 +1,11 @@
 #![allow(dead_code)]
 
 mod context;
-mod future;
 mod thread;
 
 use alloc::sync::Arc;
 
-use crate::error::AcoreResult;
 use crate::sched::executor;
-use future::ThreadRunnerFuture;
 
 pub use context::{ThreadContext, TrapReason};
 pub use thread::Thread;
@@ -19,34 +16,40 @@ pub fn current<'a>() -> &'a Thread {
 }
 
 pub fn spawn(thread: Arc<Thread>) {
-    executor::spawn(ThreadRunnerFuture::new(thread));
+    info!(
+        "spawn {} thread {}.",
+        if thread.is_user { "user" } else { "kernel" },
+        thread.id
+    );
+    executor::spawn(thread::ThreadSwitchFuture::new(thread));
 }
 
 pub fn init() {
-    test_new_thread().unwrap();
+    spawn(Thread::new_kernel(thread::idle()).unwrap());
+    spawn(Thread::new_user(test_user_thread as usize, 2333).unwrap());
+    spawn(Thread::new_user(test_user_thread as usize, 2336).unwrap());
+    spawn(
+        Thread::new_kernel(async move {
+            for i in 0..20 {
+                println!("TEST kernel thread {}", i);
+                super::sched::yield_now().await?;
+            }
+            Ok(())
+        })
+        .unwrap(),
+    );
 }
 
 pub fn run_forever() -> ! {
-    loop {
-        executor::run_until_idle();
-        info!("IDLE");
-        crate::arch::cpu::wait_for_interrupt();
-    }
-}
-
-fn test_new_thread() -> AcoreResult {
-    let t = Thread::new_user(test_user_thread, 2333)?;
-    spawn(t);
-    let t = Thread::new_user(test_user_thread, 3332)?;
-    spawn(t);
-    Ok(())
+    executor::run_until_idle();
+    unreachable!();
 }
 
 fn test_user_thread(arg: usize) -> ! {
-    let mut num = 2333;
     let a = [2, 3, 3, 4];
+    let mut num = arg;
     loop {
-        let mut ret = arg;
+        let mut ret = 0;
         unsafe {
             asm!("ecall",
                 in("a7") num,

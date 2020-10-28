@@ -1,7 +1,6 @@
-use alloc::sync::Arc;
+use alloc::boxed::Box;
 
-use super::thread::Thread;
-use crate::error::AcoreResult;
+use crate::error::{AcoreError, AcoreResult};
 use crate::memory::{handle_page_fault, MMUFlags};
 
 pub trait ThreadContext: core::fmt::Debug + Send + Sync {
@@ -43,25 +42,29 @@ pub enum TrapReason {
     Unknown(usize),
 }
 
-pub fn handle_user_trap<C: ThreadContext>(
-    _thread: &Arc<Thread<C>>,
-    trap: TrapReason,
-    ctx: &mut C,
-) -> AcoreResult {
+pub fn handle_user_trap<C: ThreadContext>(trap: TrapReason, ctx: &mut Box<C>) -> AcoreResult {
     trace!("handle trap from user: {:#x?} {:#x?}", trap, ctx);
-    match trap {
+    let res = match trap {
         TrapReason::Syscall => handle_syscall(ctx),
         TrapReason::PageFault(addr, access_flags) => handle_page_fault(addr, access_flags),
-        _ => error!("unhandled trap from user: {:#x?}", trap),
-    }
+        _ => {
+            warn!("unhandled trap from user: {:#x?}", trap);
+            Err(AcoreError::NotSupported)
+        }
+    };
     trace!("user trap end");
-    Ok(())
+    res
 }
 
-fn handle_syscall<C: ThreadContext>(ctx: &mut C) {
+fn handle_syscall<C: ThreadContext>(ctx: &mut Box<C>) -> AcoreResult {
     let num = ctx.get_syscall_num();
     let args = ctx.get_syscall_args();
-    info!("SYSCALL {} {:?}", num, args);
+    println!("SYSCALL {} {:?}", num, args);
     let ret = num + 1;
     ctx.set_syscall_ret(ret);
+    super::current().set_need_sched();
+    if num == 2344 {
+        super::current().set_exited();
+    }
+    Ok(())
 }

@@ -9,10 +9,13 @@ mod heap;
 mod paging;
 mod vmm;
 
+use crate::error::AcoreResult;
+use crate::task::current;
+
 pub use addr::{PhysAddr, VirtAddr};
 pub use frame::Frame;
 pub use paging::{MMUFlags, PageTable, PageTableEntry};
-pub use vmm::MemorySet;
+pub use vmm::{MemorySet, KERNEL_MEMORY_SET};
 
 pub const PAGE_SIZE: usize = 0x1000;
 pub use crate::arch::memory::consts::*;
@@ -30,13 +33,9 @@ pub fn clear_bss() {
     }
 }
 
-pub fn handle_page_fault(vaddr: VirtAddr, access_flags: MMUFlags) {
-    debug!("Page Fault @ {:#x} when {:?}", vaddr, access_flags);
-    crate::task::current()
-        .vm
-        .lock()
-        .handle_page_fault(vaddr, access_flags)
-        .unwrap(); // TODO: exit thread
+pub fn handle_page_fault(vaddr: VirtAddr, access_flags: MMUFlags) -> AcoreResult {
+    debug!("page fault @ {:#x} with access {:?}", vaddr, access_flags);
+    current().vm.lock().handle_page_fault(vaddr, access_flags)
 }
 
 pub fn init() {

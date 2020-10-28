@@ -123,7 +123,7 @@ impl VmArea {
     ) -> AcoreResult {
         debug_assert!(offset < self.end - self.start);
         trace!(
-            "handle page fault @ {:#x?} when {:?}: {:#x?}",
+            "handle page fault @ {:#x?} with access {:?}: {:#x?}",
             offset,
             access_flags,
             self

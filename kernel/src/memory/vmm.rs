@@ -1,6 +1,7 @@
 //! Virtual memory management.
 
 use alloc::collections::{btree_map::Entry, BTreeMap};
+use alloc::sync::Arc;
 use core::fmt::{Debug, Formatter, Result};
 
 use lazy_static::lazy_static;
@@ -110,6 +111,10 @@ impl<PT: PageTable> MemorySet<PT> {
                 return area.handle_page_fault(vaddr - area.start, access_flags, &mut self.pt);
             }
         }
+        warn!(
+            "unhandled page fault @ {:#x?} with access {:?}",
+            vaddr, access_flags
+        );
         Err(AcoreError::NotFound)
     }
 
@@ -143,7 +148,8 @@ impl<PT: PageTable> Debug for MemorySet<PT> {
 }
 
 lazy_static! {
-    pub static ref KERNEL_MEMORY_SET: Mutex<MemorySet> = Mutex::new(MemorySet::new_kernel());
+    pub static ref KERNEL_MEMORY_SET: Arc<Mutex<MemorySet>> =
+        Arc::new(Mutex::new(MemorySet::new_kernel()));
 }
 
 /// Re-build a fine-grained kernel page table, push memory segments to kernel memory set.

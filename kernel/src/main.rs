@@ -65,5 +65,7 @@ pub fn normal_main() -> ! {
 pub fn io_main() -> ! {
     info!("Hello, I/O CPU!");
     unsafe { trapframe::init() };
-    loop {}
+    loop {
+        arch::cpu::wait_for_interrupt();
+    }
 }

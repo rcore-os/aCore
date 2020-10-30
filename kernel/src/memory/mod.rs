@@ -10,7 +10,6 @@ mod paging;
 mod vmm;
 
 use crate::error::AcoreResult;
-use crate::task::current;
 
 pub use addr::{PhysAddr, VirtAddr};
 pub use frame::Frame;
@@ -33,9 +32,13 @@ pub fn clear_bss() {
     }
 }
 
-pub fn handle_page_fault(vaddr: VirtAddr, access_flags: MMUFlags) -> AcoreResult {
-    debug!("page fault @ {:#x} with access {:?}", vaddr, access_flags);
-    current().vm.lock().handle_page_fault(vaddr, access_flags)
+pub fn handle_kernel_page_fault(vaddr: VirtAddr, access_flags: MMUFlags) -> AcoreResult {
+    debug!(
+        "kernel page fault @ {:#x} with access {:?}",
+        vaddr, access_flags
+    );
+    let th = unsafe { crate::task::current() };
+    th.vm.lock().handle_page_fault(vaddr, access_flags)
 }
 
 pub fn init() {

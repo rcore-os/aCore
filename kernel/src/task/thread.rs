@@ -10,7 +10,7 @@ use core::{
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use super::context::{handle_user_trap, ThreadContext};
+use super::context::ThreadContext;
 use crate::arch::context::ArchThreadContext;
 use crate::error::{AcoreError, AcoreResult};
 use crate::fs::File;
@@ -85,8 +85,11 @@ impl Thread {
         Ok(th)
     }
 
-    pub fn set_exited(&self) {
+    pub fn exit(&self) {
         self.state.lock().exited = true;
+        if self.is_user {
+            self.vm.lock().clear(); // remove all user mappings
+        }
     }
 
     pub fn set_need_sched(&self) {
@@ -99,14 +102,6 @@ impl Thread {
         Arc::as_ptr(self) as usize
     }
 
-    fn exit(self: &Arc<Self>) {
-        if self.is_user {
-            self.vm.lock().clear(); // remove all user mappings
-        }
-        ZOMBIES.lock().push(self.clone()); // add to zombie thread list, it will finally drop in idle thread
-        THREAD_POOL.lock().remove(&self.id);
-    }
-
     async fn run_user(self: &Arc<Self>) -> AcoreResult {
         if !self.is_user {
             return Err(AcoreError::BadState);
@@ -114,7 +109,7 @@ impl Thread {
         loop {
             let mut ctx = self.context.lock().take().ok_or(AcoreError::BadState)?;
             let trap = ctx.run();
-            handle_user_trap(trap, &mut ctx)?;
+            self.handle_user_trap(trap, &mut ctx)?;
             ctx.end_trap(trap);
             *self.context.lock() = Some(ctx);
 
@@ -179,14 +174,17 @@ impl Future for ThreadSwitchFuture {
         }
         self.0.future.lock().as_mut().poll(cx).map(|res| {
             info!("thread {} exited with {:?}.", self.0.id, res);
-            self.0.exit();
+            THREAD_POOL.lock().remove(&self.0.id);
+            // add to zombie thread list, it will finally drop in idle thread
+            ZOMBIES.lock().push(self.0.clone());
         })
     }
 }
 
 pub async fn idle() -> AcoreResult {
     loop {
-        ZOMBIES.lock().clear(); // drop all zombie threads and deallocate their root page tables
+        // drop all zombie threads and deallocate their root page tables
+        ZOMBIES.lock().clear();
         if THREAD_POOL.lock().len() == 1 {
             info!("no threads to run, waiting for interrupt...");
             crate::arch::cpu::wait_for_interrupt();

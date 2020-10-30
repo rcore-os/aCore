@@ -20,6 +20,7 @@ mod logging;
 mod fs;
 mod memory;
 mod sched;
+mod syscall;
 mod task;
 mod utils;
 

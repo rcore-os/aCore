@@ -2,7 +2,9 @@ ARCH ?= riscv64
 MODE ?= debug
 SMP ?= 2
 LOG ?=
-USER_ELF ?= ../user/test
+USER_ELF ?= ../user/build/$(ARCH)/test
+
+export ARCH
 
 sysroot := $(shell rustc --print sysroot)
 OBJDUMP ?= $(shell find $(sysroot) -name llvm-objdump)

@@ -3,3 +3,4 @@
 target
 Cargo.lock
 !kernel/Cargo.lock
+user/build/

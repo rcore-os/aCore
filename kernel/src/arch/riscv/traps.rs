@@ -3,7 +3,7 @@ use trapframe::TrapFrame;
 use riscv::register::scause::{self, Exception as E, Interrupt as I, Trap};
 use riscv::register::stval;
 
-use crate::memory::{handle_page_fault, MMUFlags};
+use crate::memory::{handle_kernel_page_fault, MMUFlags};
 
 /// handle interrupt from kernel
 #[no_mangle]
@@ -20,10 +20,14 @@ extern "C" fn trap_handler(_tf: &mut TrapFrame) {
         Trap::Interrupt(I::SupervisorSoft) => ipi(),
         Trap::Interrupt(I::SupervisorTimer) => {}
         Trap::Exception(E::InstructionPageFault) => {
-            handle_page_fault(stval, MMUFlags::EXECUTE).unwrap()
+            handle_kernel_page_fault(stval, MMUFlags::EXECUTE).unwrap()
         }
-        Trap::Exception(E::LoadPageFault) => handle_page_fault(stval, MMUFlags::READ).unwrap(),
-        Trap::Exception(E::StorePageFault) => handle_page_fault(stval, MMUFlags::WRITE).unwrap(),
+        Trap::Exception(E::LoadPageFault) => {
+            handle_kernel_page_fault(stval, MMUFlags::READ).unwrap()
+        }
+        Trap::Exception(E::StorePageFault) => {
+            handle_kernel_page_fault(stval, MMUFlags::WRITE).unwrap()
+        }
         _ => panic!("unhandled trap from kernel: {:?}", scause.cause()),
     }
     trace!("kernel trap end");

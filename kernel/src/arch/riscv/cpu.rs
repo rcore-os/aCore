@@ -3,7 +3,7 @@ pub fn id() -> usize {
     if boot_id < crate::consts::MAX_CPU_NUM {
         boot_id
     } else {
-        crate::task::current().cpu
+        unsafe { crate::task::current().cpu }
     }
 }
 

@@ -11,9 +11,9 @@ use crate::sched::executor;
 pub use context::{ThreadContext, TrapReason};
 pub use thread::Thread;
 
-pub fn current<'a>() -> &'a Thread {
+pub unsafe fn current<'a>() -> &'a Thread {
     let ptr = crate::arch::context::read_tls() as *const Thread;
-    unsafe { &*ptr }
+    &*ptr
 }
 
 pub fn spawn(thread: Arc<Thread>) {

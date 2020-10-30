@@ -1,7 +1,9 @@
 use alloc::boxed::Box;
 
+use super::Thread;
 use crate::error::{AcoreError, AcoreResult};
-use crate::memory::{handle_page_fault, MMUFlags};
+use crate::memory::{MMUFlags, VirtAddr};
+use crate::syscall::Syscall;
 
 pub trait ThreadContext: core::fmt::Debug + Send + Sync {
     /// Create a new context and set entry pointer, stack point, etc.
@@ -42,25 +44,35 @@ pub enum TrapReason {
     Unknown(usize),
 }
 
-pub fn handle_user_trap<C: ThreadContext>(trap: TrapReason, ctx: &mut Box<C>) -> AcoreResult {
-    trace!("handle trap from user: {:#x?} {:#x?}", trap, ctx);
-    let res = match trap {
-        TrapReason::Syscall => handle_syscall(ctx),
-        TrapReason::PageFault(addr, access_flags) => handle_page_fault(addr, access_flags),
-        _ => {
-            warn!("unhandled trap from user: {:#x?}", trap);
-            Err(AcoreError::NotSupported)
-        }
-    };
-    trace!("user trap end");
-    res
-}
+impl Thread {
+    pub fn handle_user_trap(
+        &self,
+        trap: TrapReason,
+        ctx: &mut Box<impl ThreadContext>,
+    ) -> AcoreResult {
+        trace!("handle trap from user: {:#x?} {:#x?}", trap, ctx);
+        let res = match trap {
+            TrapReason::Syscall => self.handle_syscall(ctx),
+            TrapReason::PageFault(addr, access_flags) => self.handle_page_fault(addr, access_flags),
+            _ => {
+                warn!("unhandled trap from user: {:#x?}", trap);
+                Err(AcoreError::NotSupported)
+            }
+        };
+        trace!("user trap end");
+        res
+    }
 
-fn handle_syscall<C: ThreadContext>(ctx: &mut Box<C>) -> AcoreResult {
-    let num = ctx.get_syscall_num();
-    let args = ctx.get_syscall_args();
-    warn!("unsupported syscall: {} {:?}", num, args);
-    ctx.set_syscall_ret(0);
-    super::current().set_exited();
-    Ok(())
+    fn handle_page_fault(&self, vaddr: VirtAddr, access_flags: MMUFlags) -> AcoreResult {
+        debug!("page fault @ {:#x} with access {:?}", vaddr, access_flags);
+        self.vm.lock().handle_page_fault(vaddr, access_flags)
+    }
+
+    fn handle_syscall(&self, ctx: &mut Box<impl ThreadContext>) -> AcoreResult {
+        let num = ctx.get_syscall_num() as u32;
+        let args = ctx.get_syscall_args();
+        let ret = Syscall::new(&self).syscall(num, args) as usize;
+        ctx.set_syscall_ret(ret);
+        Ok(())
+    }
 }

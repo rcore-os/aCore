@@ -1,20 +1,25 @@
 ARCH ?= riscv64
-PREFIX ?= $(ARCH)-linux-musl-
-TARGET ?= test
+MODE ?= release
 
-SRC := $(TARGET).c
+out_dir := build/$(ARCH)
 
-CC := $(PREFIX)gcc
-OBJDUMP := $(PREFIX)objdump
-CFLAGS := -nostdlib
+cmake_build_args := -DARCH=$(ARCH)
+ifeq ($(MODE), release)
+cmake_build_args += -DCMAKE_BUILD_TYPE=Release
+else ifeq ($(MODE), debug)
+cmake_build_args += -DCMAKE_BUILD_TYPE=Debug
+endif
 
-all: $(TARGET)
+all: c
 
-$(TARGET): $(SRC)
-	$(CC) $< -o $@ $(CFLAGS)
-
-asm: $(TARGET)
-	$(OBJDUMP) -d $(TARGET) | less
+c:
+	@echo Building aCore user app
+	@mkdir -p c/build
+	@cd c/build && cmake $(cmake_build_args) .. && make -j
+	@mkdir -p $(out_dir)
+	@cp c/build/$(ARCH)/* $(out_dir)
 
 clean:
-	rm test
+	@rm -rf c/build build
+
+.PHONY: build clean c

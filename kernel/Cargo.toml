@@ -12,6 +12,7 @@ spin = "0.6"
 xmas-elf = "0.7"
 bitflags = "1.2"
 trapframe = "0.6"
+numeric-enum-macro = "0.2"
 buddy_system_allocator = "0.5"
 lazy_static = { version = "1.4", features = ["spin_no_std"] }
 executor = { git = "https://github.com/rcore-os/executor.git", rev = "a2d02ee9" }

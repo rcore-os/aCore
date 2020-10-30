@@ -1,4 +1,5 @@
 use alloc::sync::Arc;
+use core::slice;
 
 use spin::Mutex;
 
@@ -6,7 +7,7 @@ use super::{PmArea, VmArea};
 use crate::error::{AcoreError, AcoreResult};
 use crate::memory::{
     addr::{align_down, align_up},
-    MMUFlags, PhysAddr,
+    MMUFlags, PhysAddr, PAGE_SIZE,
 };
 
 /// A PMA representing a fixed physical memory region.
@@ -20,12 +21,39 @@ impl PmArea for PmAreaFixed {
     fn size(&self) -> usize {
         self.end - self.start
     }
-    fn get_frame(&mut self, offset: usize, _need_alloc: bool) -> AcoreResult<Option<PhysAddr>> {
-        debug_assert!(offset < self.size());
-        Ok(Some(align_down(self.start + offset)))
+    fn get_frame(&mut self, idx: usize, _need_alloc: bool) -> AcoreResult<Option<PhysAddr>> {
+        let paddr = self.start + idx * PAGE_SIZE;
+        debug_assert!(paddr < self.end);
+        Ok(Some(paddr))
     }
-    fn release_frame(&mut self, _offset: usize) -> AcoreResult {
+    fn release_frame(&mut self, _idx: usize) -> AcoreResult {
         Ok(())
+    }
+    fn read(&mut self, offset: usize, buf: &mut [u8]) -> AcoreResult<usize> {
+        if offset >= self.size() {
+            warn!(
+                "out of range in PmAreaFixed::read(): offset={:#x?}, {:#x?}",
+                offset, self
+            );
+            return Err(AcoreError::OutOfRange);
+        }
+        let len = buf.len().min(self.end - offset);
+        let data = unsafe { slice::from_raw_parts((self.start + offset) as *const u8, len) };
+        buf.copy_from_slice(data);
+        Ok(len)
+    }
+    fn write(&mut self, offset: usize, buf: &[u8]) -> AcoreResult<usize> {
+        if offset >= self.size() {
+            warn!(
+                "out of range in PmAreaFixed::write(): offset={:#x?}, {:#x?}",
+                offset, self
+            );
+            return Err(AcoreError::OutOfRange);
+        }
+        let len = buf.len().min(self.end - offset);
+        let data = unsafe { slice::from_raw_parts_mut((self.start + offset) as *mut u8, len) };
+        data.copy_from_slice(buf);
+        Ok(len)
     }
 }
 

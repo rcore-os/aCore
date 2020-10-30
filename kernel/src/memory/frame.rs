@@ -5,7 +5,7 @@ use core::mem::ManuallyDrop;
 
 use spin::Mutex;
 
-use super::{PhysAddr, PAGE_SIZE, PHYS_MEMORY_OFFSET};
+use super::{addr::phys_to_virt, PhysAddr, PAGE_SIZE, PHYS_MEMORY_OFFSET};
 use crate::arch::memory::FrameAlloc;
 use crate::error::{AcoreError, AcoreResult};
 
@@ -133,6 +133,36 @@ impl Frame {
     /// Get the total size (in bytes) of this frame.
     pub fn size(&self) -> usize {
         self.frame_count * PAGE_SIZE
+    }
+
+    /// convert to raw a pointer.
+    pub fn as_ptr(&self) -> *const u8 {
+        phys_to_virt(self.start_paddr) as *const u8
+    }
+
+    /// convert to a mutable raw pointer.
+    pub fn as_mut_ptr(&self) -> *mut u8 {
+        phys_to_virt(self.start_paddr) as *mut u8
+    }
+
+    /// Fill `self` with `byte`.
+    pub fn fill(&mut self, byte: u8) {
+        unsafe { core::ptr::write_bytes(self.as_mut_ptr(), byte, self.size()) }
+    }
+
+    /// Fill `self` with zero.
+    pub fn zero(&mut self) {
+        self.fill(0)
+    }
+
+    /// Forms a slice that can read data.
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { core::slice::from_raw_parts(self.as_ptr(), self.size()) }
+    }
+
+    /// Forms a mutable slice that can write data.
+    pub fn as_slice_mut(&mut self) -> &mut [u8] {
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.size()) }
     }
 }
 

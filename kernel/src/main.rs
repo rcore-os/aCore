@@ -17,6 +17,7 @@ mod error;
 mod lang;
 #[macro_use]
 mod logging;
+mod fs;
 mod memory;
 mod sched;
 mod task;
@@ -52,7 +53,9 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
     match cpu_id {
         consts::NORMAL_CPU_ID => normal_main(),
         consts::IO_CPU_ID => io_main(),
-        _ => loop {},
+        _ => loop {
+            arch::cpu::wait_for_interrupt();
+        },
     }
 }
 

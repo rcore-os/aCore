@@ -2,6 +2,7 @@ ARCH ?= riscv64
 MODE ?= debug
 SMP ?= 2
 LOG ?=
+USER_ELF ?= ../user/test
 
 sysroot := $(shell rustc --print sysroot)
 OBJDUMP ?= $(shell find $(sysroot) -name llvm-objdump)
@@ -23,7 +24,9 @@ ifeq ($(ARCH), riscv64)
 qemu_args += \
 	-machine virt \
 	-bios default \
-	-device loader,file=$(kernel_img),addr=0x80200000
+	-m 1G \
+	-device loader,addr=0x80200000,file=$(kernel_img) \
+	-device loader,addr=0x90000000,file=$(USER_ELF),force-raw=on
 endif
 
 .PHONY: build kernel run qemu debug asm clean

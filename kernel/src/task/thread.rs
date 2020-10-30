@@ -1,5 +1,5 @@
 use alloc::collections::BTreeMap;
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{
     fmt::{Debug, Formatter, Result},
     future::Future,
@@ -13,13 +13,10 @@ use spin::Mutex;
 use super::context::{handle_user_trap, ThreadContext};
 use crate::arch::context::ArchThreadContext;
 use crate::error::{AcoreError, AcoreResult};
-use crate::memory::addr::{virt_to_phys, VirtAddr};
-use crate::memory::areas::{PmAreaDelay, VmArea};
-use crate::memory::{
-    MMUFlags, MemorySet, KERNEL_MEMORY_SET, PAGE_SIZE, USER_STACK_OFFSET, USER_STACK_SIZE,
-};
+use crate::fs::File;
+use crate::memory::{MemorySet, KERNEL_MEMORY_SET};
 use crate::sched::yield_now;
-use crate::utils::IdAllocator;
+use crate::utils::{ElfLoader, IdAllocator};
 
 type ThreadFuture = dyn Future<Output = AcoreResult> + Send;
 type ThreadFuturePinned = Pin<Box<ThreadFuture>>;
@@ -50,12 +47,7 @@ lazy_static! {
 }
 
 impl Thread {
-    fn new(is_user: bool) -> AcoreResult<Arc<Self>> {
-        let vm = if is_user {
-            Arc::new(Mutex::new(MemorySet::new_user()))
-        } else {
-            KERNEL_MEMORY_SET.clone()
-        };
+    fn new(is_user: bool, vm: Arc<Mutex<MemorySet>>) -> AcoreResult<Arc<Self>> {
         let th = Arc::new(Self {
             id: TID_ALLOCATOR.lock().alloc()?,
             cpu: crate::arch::cpu::id(),
@@ -72,17 +64,23 @@ impl Thread {
     pub fn new_kernel(
         entry: impl Future<Output = AcoreResult> + Send + 'static,
     ) -> AcoreResult<Arc<Self>> {
-        let th = Self::new(false)?;
+        let th = Self::new(false, KERNEL_MEMORY_SET.clone())?;
         *th.future.lock() = Box::pin(entry);
         debug!("new kernel thread: {:#x?}", th);
         Ok(th)
     }
 
-    pub fn new_user(entry: VirtAddr, arg: usize) -> AcoreResult<Arc<Self>> {
-        let th = Self::new(true)?;
+    pub fn new_user(file: &File, args: Vec<String>) -> AcoreResult<Arc<Self>> {
+        let loader = ElfLoader::new(file)?;
+        let mut vm = MemorySet::new_user();
+        let (entry_pointer, ustack_pointer) = loader.init_vm(&mut vm, args)?;
+
+        let th = Self::new(true, Arc::new(Mutex::new(vm)))?;
         let tmp = th.clone();
         *th.future.lock() = Box::pin(async move { tmp.run_user().await });
-        th.init_user(entry, arg)?;
+        let ctx = ArchThreadContext::new(entry_pointer, ustack_pointer);
+        *th.context.lock() = Some(Box::from(ctx));
+
         debug!("new user thread: {:#x?}", th);
         Ok(th)
     }
@@ -97,36 +95,6 @@ impl Thread {
 }
 
 impl Thread {
-    fn init_user(self: &Arc<Self>, entry: VirtAddr, arg: usize) -> AcoreResult {
-        let stack_bottom = USER_STACK_OFFSET;
-        let stack_top = stack_bottom + USER_STACK_SIZE;
-        let pma = PmAreaDelay::new(USER_STACK_SIZE)?;
-        let stack = VmArea::new(
-            stack_bottom,
-            stack_top,
-            MMUFlags::READ | MMUFlags::WRITE | MMUFlags::USER,
-            Arc::new(Mutex::new(pma)),
-            "stack",
-        )?;
-        self.vm.lock().push(stack)?;
-
-        // test text segment
-        let text_start_paddr = virt_to_phys(entry);
-        let text_end_paddr = text_start_paddr + PAGE_SIZE;
-        let text = VmArea::from_fixed_pma(
-            text_start_paddr,
-            text_end_paddr,
-            0,
-            MMUFlags::READ | MMUFlags::EXECUTE | MMUFlags::USER,
-            "text",
-        )?;
-        self.vm.lock().push(text)?;
-
-        let ctx = ArchThreadContext::new(virt_to_phys(entry), arg, stack_top, true);
-        *self.context.lock() = Some(Box::from(ctx));
-        Ok(())
-    }
-
     fn tls_ptr(self: &Arc<Self>) -> usize {
         Arc::as_ptr(self) as usize
     }
@@ -194,13 +162,11 @@ impl<C: ThreadContext> Debug for Thread<C> {
     }
 }
 
-pub(super) struct ThreadSwitchFuture {
-    inner: Arc<Thread>,
-}
+pub(super) struct ThreadSwitchFuture(Arc<Thread>);
 
 impl ThreadSwitchFuture {
     pub fn new(thread: Arc<Thread>) -> Self {
-        Self { inner: thread }
+        Self(thread)
     }
 }
 
@@ -208,12 +174,12 @@ impl Future for ThreadSwitchFuture {
     type Output = ();
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unsafe {
-            crate::arch::context::write_tls(self.inner.tls_ptr());
-            self.inner.vm.lock().activate();
+            crate::arch::context::write_tls(self.0.tls_ptr());
+            self.0.vm.lock().activate();
         }
-        self.inner.future.lock().as_mut().poll(cx).map(|res| {
-            info!("thread {} exited with {:?}.", self.inner.id, res);
-            self.inner.exit();
+        self.0.future.lock().as_mut().poll(cx).map(|res| {
+            info!("thread {} exited with {:?}.", self.0.id, res);
+            self.0.exit();
         })
     }
 }

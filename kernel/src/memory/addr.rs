@@ -22,9 +22,13 @@ pub fn align_up(addr: usize) -> usize {
 }
 
 pub fn is_aligned(addr: usize) -> bool {
-    addr & (PAGE_SIZE - 1) == 0
+    page_offset(addr) == 0
 }
 
 pub fn page_count(size: usize) -> usize {
     align_up(size) / PAGE_SIZE
+}
+
+pub fn page_offset(addr: usize) -> usize {
+    addr & (PAGE_SIZE - 1)
 }

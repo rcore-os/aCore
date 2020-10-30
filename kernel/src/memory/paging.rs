@@ -43,7 +43,7 @@ pub trait PageTable: Sized {
     /// This function is unsafe because it switches the virtual address space.
     unsafe fn set_current_root_paddr(root_paddr: PhysAddr);
 
-    fn flush_tlb(vaddr: Option<VirtAddr>);
+    fn flush_tlb(&self, vaddr: Option<VirtAddr>);
 
     fn root_paddr(&self) -> PhysAddr;
 
@@ -85,7 +85,7 @@ pub trait PageTable: Sized {
         debug!("switch table {:#x?} -> {:#x?}", old_root, new_root);
         if new_root != old_root {
             Self::set_current_root_paddr(new_root);
-            Self::flush_tlb(None);
+            self.flush_tlb(None);
         }
     }
 }

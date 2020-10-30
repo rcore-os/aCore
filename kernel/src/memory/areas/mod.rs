@@ -1,8 +1,6 @@
-mod cont;
 mod delay;
 mod fixed;
 
-pub use cont::PmAreaContiguous;
 pub use delay::PmAreaDelay;
 pub use fixed::PmAreaFixed;
 
@@ -20,10 +18,15 @@ use crate::error::{AcoreError, AcoreResult};
 pub trait PmArea: core::fmt::Debug + Send + Sync {
     /// Size of total physical memory.
     fn size(&self) -> usize;
-    /// Get the start address of a 4KB physical frame relative to the offset, may perform allocation.
-    fn get_frame(&mut self, offset: usize, need_alloc: bool) -> AcoreResult<Option<PhysAddr>>;
-    /// Release the given 4KB physical frame, may perform deallocation.
-    fn release_frame(&mut self, offset: usize) -> AcoreResult;
+    /// Get the start address of a 4KB physical frame relative to the index `idx`, perform
+    /// allocation if `need_alloc` is `true`.
+    fn get_frame(&mut self, idx: usize, need_alloc: bool) -> AcoreResult<Option<PhysAddr>>;
+    /// Release the given 4KB physical frame, perform deallocation if the frame has been allocated.
+    fn release_frame(&mut self, idx: usize) -> AcoreResult;
+    /// Read data from this PMA at `offset`.
+    fn read(&mut self, offset: usize, data: &mut [u8]) -> AcoreResult<usize>;
+    /// Write data to this PMA at `offset`.
+    fn write(&mut self, offset: usize, data: &[u8]) -> AcoreResult<usize>;
 }
 
 /// A contiguous virtual memory area with same MMU flags.
@@ -49,9 +52,20 @@ impl VmArea {
             warn!("invalid memory region: [{:#x?}, {:#x?})", start, end);
             return Err(AcoreError::InvalidArgs);
         }
+        let start = align_down(start);
+        let end = align_up(end);
+        if end - start != pma.lock().size() {
+            warn!(
+                "VmArea size != PmArea size: [{:#x?}, {:#x?}), {:x?}",
+                start,
+                end,
+                pma.lock()
+            );
+            return Err(AcoreError::InvalidArgs);
+        }
         Ok(Self {
-            start: align_down(start),
-            end: align_up(end),
+            start,
+            end,
             flags,
             pma,
             name,
@@ -76,9 +90,8 @@ impl VmArea {
     pub fn map_area(&self, pt: &mut impl PageTable) -> AcoreResult {
         trace!("create mapping: {:#x?}", self);
         let mut pma = self.pma.lock();
-        // debug_assert!(is_aligned(target));
         for vaddr in (self.start..self.end).step_by(PAGE_SIZE) {
-            let page = pma.get_frame(vaddr - self.start, false)?;
+            let page = pma.get_frame((vaddr - self.start) / PAGE_SIZE, false)?;
             let res = if let Some(paddr) = page {
                 pt.map(vaddr, paddr, self.flags)
             } else {
@@ -100,7 +113,7 @@ impl VmArea {
         trace!("destory mapping: {:#x?}", self);
         let mut pma = self.pma.lock();
         for vaddr in (self.start..self.end).step_by(PAGE_SIZE) {
-            let res = pma.release_frame(vaddr - self.start);
+            let res = pma.release_frame((vaddr - self.start) / PAGE_SIZE);
             if res != Err(AcoreError::NotFound) {
                 if res.is_err() {
                     return res;
@@ -123,7 +136,7 @@ impl VmArea {
     ) -> AcoreResult {
         debug_assert!(offset < self.end - self.start);
         trace!(
-            "handle page fault @ {:#x?} with access {:?}: {:#x?}",
+            "handle page fault @ offset {:#x?} with access {:?}: {:#x?}",
             offset,
             access_flags,
             self
@@ -134,7 +147,9 @@ impl VmArea {
         }
         let offset = align_down(offset);
         let vaddr = self.start + offset;
-        let paddr = pma.get_frame(offset, true)?.ok_or(AcoreError::NoMemory)?;
+        let paddr = pma
+            .get_frame(offset / PAGE_SIZE, true)?
+            .ok_or(AcoreError::NoMemory)?;
 
         let entry = pt.get_entry(vaddr)?;
         if entry.is_present() {
@@ -142,6 +157,7 @@ impl VmArea {
         } else {
             entry.set_addr(paddr);
             entry.set_flags(self.flags);
+            pt.flush_tlb(Some(vaddr));
             Ok(())
         }
     }

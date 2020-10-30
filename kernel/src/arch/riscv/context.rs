@@ -13,15 +13,11 @@ pub struct ArchThreadContext {
 }
 
 impl ThreadContext for ArchThreadContext {
-    fn new(entry_pointer: usize, arg: usize, stack_point: usize, is_user: bool) -> Self {
+    fn new(entry_pointer: usize, stack_point: usize) -> Self {
         let mut ctx = UserContext::default();
         ctx.set_ip(entry_pointer);
         ctx.set_sp(stack_point);
-        ctx.general.a0 = arg;
         ctx.sstatus = 1 << 5; // SPIE
-        if !is_user {
-            ctx.sstatus |= 1 << 8; // SPP
-        }
         Self { user: ctx }
     }
 

@@ -114,9 +114,9 @@ impl From<rv::FlagUpdateError> for AcoreError {
 }
 impl PageTable for RvPageTable {
     fn new() -> Self {
-        let root = Frame::new().expect("failed to allocate root frame for page table");
+        let mut root = Frame::new().expect("failed to allocate root frame for page table");
+        root.zero();
         let table = unsafe { &mut *(phys_to_virt(root.start_paddr()) as *mut PT) };
-        table.zero();
         Self {
             inner: TopLevelPageTable::new(table, PHYS_VIRT_OFFSET),
             root,
@@ -141,7 +141,7 @@ impl PageTable for RvPageTable {
         satp::set(satp::Mode::Sv39, 0, root_paddr >> 12)
     }
 
-    fn flush_tlb(vaddr: Option<VirtAddr>) {
+    fn flush_tlb(&self, vaddr: Option<VirtAddr>) {
         unsafe {
             if let Some(vaddr) = vaddr {
                 sfence_vma(0, vaddr)

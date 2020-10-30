@@ -5,7 +5,7 @@ use crate::memory::{handle_page_fault, MMUFlags};
 
 pub trait ThreadContext: core::fmt::Debug + Send + Sync {
     /// Create a new context and set entry pointer, stack point, etc.
-    fn new(entry_pointer: usize, arg: usize, stack_point: usize, is_user: bool) -> Self;
+    fn new(entry_pointer: usize, stack_point: usize) -> Self;
 
     /// Get number of syscall.
     fn get_syscall_num(&self) -> usize;
@@ -59,12 +59,8 @@ pub fn handle_user_trap<C: ThreadContext>(trap: TrapReason, ctx: &mut Box<C>) ->
 fn handle_syscall<C: ThreadContext>(ctx: &mut Box<C>) -> AcoreResult {
     let num = ctx.get_syscall_num();
     let args = ctx.get_syscall_args();
-    println!("SYSCALL {} {:?}", num, args);
-    let ret = num + 1;
-    ctx.set_syscall_ret(ret);
-    super::current().set_need_sched();
-    if num == 2344 {
-        super::current().set_exited();
-    }
+    warn!("unsupported syscall: {} {:?}", num, args);
+    ctx.set_syscall_ret(0);
+    super::current().set_exited();
     Ok(())
 }

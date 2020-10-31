@@ -7,6 +7,7 @@ pub mod areas;
 mod frame;
 mod heap;
 mod paging;
+pub mod uaccess;
 mod vmm;
 
 use crate::error::AcoreResult;
@@ -33,7 +34,7 @@ pub fn clear_bss() {
 }
 
 pub fn handle_kernel_page_fault(vaddr: VirtAddr, access_flags: MMUFlags) -> AcoreResult {
-    debug!(
+    error!(
         "kernel page fault @ {:#x} with access {:?}",
         vaddr, access_flags
     );

@@ -85,7 +85,7 @@ impl Thread {
         Ok(th)
     }
 
-    pub fn exit(&self) {
+    pub fn exit(&self, _code: usize) {
         self.state.lock().exited = true;
         if self.is_user {
             self.vm.lock().clear(); // remove all user mappings

@@ -10,6 +10,8 @@ ssize_t write(int, const void*, size_t);
 
 int close(int);
 
+pid_t getpid(void);
+int sched_yield(void);
 void exit(int);
 
 #endif // __UNISTD_H__

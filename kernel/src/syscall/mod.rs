@@ -2,13 +2,17 @@ mod consts;
 
 use core::convert::TryFrom;
 
-use crate::error::AcoreError;
+use crate::error::{AcoreError, AcoreResult};
+use crate::fs::get_file_by_fd;
+use crate::memory::uaccess::{UserInPtr, UserOutPtr};
 use crate::task::Thread;
 use consts::SyscallType as Sys;
 
 pub struct Syscall<'a> {
     thread: &'a Thread,
 }
+
+type SysResult = AcoreResult<usize>;
 
 impl<'a> Syscall<'a> {
     pub fn new(thread: &'a Thread) -> Self {
@@ -25,11 +29,13 @@ impl<'a> Syscall<'a> {
         };
         debug!("{:?} => args={:x?}", sys_type, args);
 
+        let [a0, a1, a2, _a3, _a4, _a5] = args;
         let ret = match sys_type {
-            Sys::EXIT => {
-                self.thread.exit();
-                Ok(0)
-            }
+            Sys::READ => self.sys_read(a0, a1.into(), a2),
+            Sys::WRITE => self.sys_write(a0, a1.into(), a2),
+            Sys::SCHED_YIELD => self.sys_yield(),
+            Sys::GETPID => self.sys_getpid(),
+            Sys::EXIT => self.sys_exit(a0),
             _ => {
                 warn!("syscall unimplemented: {:?}", sys_type);
                 Err(AcoreError::NotSupported)
@@ -41,5 +47,35 @@ impl<'a> Syscall<'a> {
             Ok(code) => code as isize,
             Err(err) => -(err as isize),
         }
+    }
+}
+
+impl Syscall<'_> {
+    fn sys_read(&self, fd: usize, mut base: UserOutPtr<u8>, count: usize) -> SysResult {
+        let file = get_file_by_fd(fd);
+        let mut buf = vec![0u8; count];
+        let count = file.read(0, &mut buf)?;
+        base.write_array(&buf[..count])?;
+        Ok(count)
+    }
+
+    fn sys_write(&self, fd: usize, base: UserInPtr<u8>, count: usize) -> SysResult {
+        let file = get_file_by_fd(fd);
+        let buf = base.read_array(count)?;
+        file.write(0, &buf)
+    }
+
+    fn sys_yield(&self) -> SysResult {
+        self.thread.set_need_sched();
+        Ok(0)
+    }
+
+    fn sys_getpid(&self) -> SysResult {
+        Ok(self.thread.id)
+    }
+
+    fn sys_exit(&self, code: usize) -> SysResult {
+        self.thread.exit(code);
+        Ok(0)
     }
 }

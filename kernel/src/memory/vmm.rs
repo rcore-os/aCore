@@ -10,6 +10,7 @@ use spin::Mutex;
 use super::addr::{align_down, align_up, virt_to_phys, VirtAddr};
 use super::areas::VmArea;
 use super::paging::{MMUFlags, PageTable};
+use super::USER_VIRT_ADDR_LIMIT;
 use crate::arch::memory::ArchPageTable;
 use crate::error::{AcoreError, AcoreResult};
 
@@ -42,10 +43,15 @@ impl<PT: PageTable> MemorySet<PT> {
     pub fn find_free_area(&self, addr_hint: VirtAddr, len: usize) -> AcoreResult<VirtAddr> {
         // brute force:
         // try each area's end address as the start
-        core::iter::once(align_up(addr_hint))
+        let addr = core::iter::once(align_up(addr_hint))
             .chain(self.areas.iter().map(|(_, area)| area.end))
             .find(|&addr| self.test_free_area(addr, addr + len))
-            .ok_or(AcoreError::NoMemory)
+            .unwrap();
+        if addr >= USER_VIRT_ADDR_LIMIT {
+            Err(AcoreError::NoMemory)
+        } else {
+            Ok(addr)
+        }
     }
 
     /// Test whether [`start`, `end`) does not overlap with any existing areas.

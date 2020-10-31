@@ -29,6 +29,7 @@ pub fn init() {
     let init_elf = RAM_DISK.lock().lookup("init");
     spawn(Thread::new_kernel(thread::idle()).unwrap());
     spawn(Thread::new_user(&init_elf, vec!["arg0".into(), "arg1".into()]).unwrap());
+    spawn(Thread::new_user(&init_elf, vec!["arg2".into(), "arg3".into()]).unwrap());
     spawn(
         Thread::new_kernel(async move {
             for i in 0..20 {

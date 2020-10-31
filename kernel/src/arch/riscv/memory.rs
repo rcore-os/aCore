@@ -1,6 +1,8 @@
 use alloc::vec::Vec;
 use core::ops::Range;
 
+use riscv::register::sstatus;
+
 use crate::error::AcoreResult;
 use crate::memory::{
     addr::{align_up, virt_to_phys},
@@ -14,6 +16,7 @@ pub mod consts {
     pub const KERNEL_HEAP_SIZE: usize = 0x40_0000; // 4 MB
     pub const USER_STACK_SIZE: usize = 0x10_0000; // 1 MB
     pub const USER_STACK_OFFSET: usize = 0x4000_0000 - USER_STACK_SIZE;
+    pub const USER_VIRT_ADDR_LIMIT: usize = 0xFFFF_FFFF;
 
     pub const PHYS_VIRT_OFFSET: usize = 0xFFFF_FFFF_0000_0000;
     pub const PHYS_MEMORY_OFFSET: usize = 0x8000_0000;
@@ -42,4 +45,11 @@ pub fn create_mapping(ms: &mut MemorySet) -> AcoreResult {
         MMUFlags::READ | MMUFlags::WRITE,
         "ramdisk",
     )?)
+}
+
+pub fn with_user_access<T>(func: impl FnOnce() -> T) -> T {
+    unsafe { sstatus::set_sum() };
+    let ret = func();
+    unsafe { sstatus::clear_sum() };
+    ret
 }

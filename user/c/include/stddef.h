@@ -31,4 +31,6 @@ typedef uint32_t uintptr_t;
 typedef uintptr_t size_t;
 typedef intptr_t ssize_t;
 
+typedef int pid_t;
+
 #endif // __STDDEF_H__

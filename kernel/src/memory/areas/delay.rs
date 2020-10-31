@@ -94,7 +94,11 @@ impl PmAreaDelay {
                 range_end -= end_offset;
             }
 
-            self.get_frame(i, true)?;
+            if self.frames[i].is_none() {
+                let mut frame = Frame::new()?;
+                frame.zero();
+                self.frames[i] = Some(frame);
+            }
             let frame = self.frames[i].as_mut().unwrap();
             op(&mut frame.as_slice_mut()[range_start..range_end]);
         }

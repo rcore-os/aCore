@@ -1,12 +1,10 @@
-mod consts;
-
 use core::convert::TryFrom;
 
+use crate::arch::syscall_ids::SyscallType as Sys;
 use crate::error::{AcoreError, AcoreResult};
 use crate::fs::get_file_by_fd;
 use crate::memory::uaccess::{UserInPtr, UserOutPtr};
 use crate::task::Thread;
-use consts::SyscallType as Sys;
 
 pub struct Syscall<'a> {
     thread: &'a Thread,

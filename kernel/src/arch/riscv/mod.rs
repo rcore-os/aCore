@@ -5,6 +5,7 @@ pub mod memory;
 mod paging;
 mod sbi;
 mod traps;
+pub mod syscall_ids;
 
 global_asm!(include_str!("boot/entry.S"));
 

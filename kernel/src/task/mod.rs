@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod context;
+mod resource;
 mod thread;
 
 use alloc::sync::Arc;

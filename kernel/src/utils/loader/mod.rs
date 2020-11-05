@@ -30,6 +30,16 @@ impl From<&str> for AcoreError {
 impl<'a> ElfLoader<'a> {
     pub fn new(file: &'a File) -> AcoreResult<Self> {
         let elf = ElfFile::new(file.as_slice_mut())?;
+
+        #[cfg(target_pointer_width = "32")]
+        if elf.header.pt1.class() != header::Class::ThirtyTwo {
+            return Err("64-bit ELF is not supported on the 32-bit system".into());
+        }
+        #[cfg(target_pointer_width = "64")]
+        if elf.header.pt1.class() != header::Class::SixtyFour {
+            return Err("32-bit ELF is not supported on the 64-bit system".into());
+        }
+
         if elf.header.pt2.type_().as_type() != header::Type::Executable {
             return Err("ELF is not executable object".into());
         }

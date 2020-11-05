@@ -301,5 +301,6 @@ pub enum SyscallType {
     PIDFD_GETFD = 438,
     FACCESSAT2 = 439,
     RISCV_FLUSH_ICACHE = 244 + 15,
+    SETUP_ASYNC_CALL = 500,
 }
 }

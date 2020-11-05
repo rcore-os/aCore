@@ -11,6 +11,7 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use super::context::ThreadContext;
+use super::resource::{OwnedResource, SharedResource};
 use crate::arch::context::ArchThreadContext;
 use crate::error::{AcoreError, AcoreResult};
 use crate::fs::File;
@@ -32,6 +33,8 @@ pub struct Thread<C: ThreadContext = ArchThreadContext> {
     pub cpu: usize,
     pub is_user: bool,
     pub vm: Arc<Mutex<MemorySet>>,
+    pub owned_res: Mutex<OwnedResource>,
+    pub shared_res: Arc<Mutex<SharedResource>>,
     context: Mutex<Option<Box<C>>>,
     state: Mutex<ThreadState>,
     future: Mutex<ThreadFuturePinned>,
@@ -53,6 +56,8 @@ impl Thread {
             cpu: crate::arch::cpu::id(),
             is_user,
             vm,
+            owned_res: Mutex::new(OwnedResource::default()),
+            shared_res: Arc::new(Mutex::new(SharedResource::default())),
             context: Mutex::new(None),
             state: Mutex::new(ThreadState::default()),
             future: Mutex::new(Box::pin(async { Ok(()) })),

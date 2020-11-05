@@ -49,6 +49,6 @@ pub fn init() {
 }
 
 pub fn secondary_init() {
-    vmm::secondary_init();
+    vmm::init();
     info!("secondary CPU memory init end.");
 }

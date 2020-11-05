@@ -18,6 +18,7 @@ use crate::error::{AcoreError, AcoreResult};
 pub struct MemorySet<PT: PageTable = ArchPageTable> {
     areas: BTreeMap<usize, VmArea>,
     pt: PT,
+    is_user: bool,
 }
 
 impl<PT: PageTable> MemorySet<PT> {
@@ -25,6 +26,7 @@ impl<PT: PageTable> MemorySet<PT> {
         Self {
             areas: BTreeMap::new(),
             pt: PT::new(),
+            is_user: false,
         }
     }
 
@@ -34,6 +36,7 @@ impl<PT: PageTable> MemorySet<PT> {
         Self {
             areas: BTreeMap::new(),
             pt,
+            is_user: true,
         }
     }
 
@@ -126,6 +129,10 @@ impl<PT: PageTable> MemorySet<PT> {
 
     /// Clear and unmap all areas.
     pub fn clear(&mut self) {
+        if !self.is_user {
+            error!("cannot clear kernel memory set");
+            return;
+        }
         for area in self.areas.values() {
             area.unmap_area(&mut self.pt).unwrap();
         }
@@ -151,11 +158,6 @@ impl<PT: PageTable> Debug for MemorySet<PT> {
             .field("page_table_root", &self.pt.root_paddr())
             .finish()
     }
-}
-
-lazy_static! {
-    pub static ref KERNEL_MEMORY_SET: Arc<Mutex<MemorySet>> =
-        Arc::new(Mutex::new(MemorySet::new_kernel()));
 }
 
 /// Re-build a fine-grained kernel page table, push memory segments to kernel memory set.
@@ -222,15 +224,17 @@ fn init_kernel_memory_set(ms: &mut MemorySet) -> AcoreResult {
     Ok(())
 }
 
-/// Initialize the kernel memory set and page table only on the primary CPU.
-pub fn init() {
-    let mut ms = KERNEL_MEMORY_SET.lock();
-    init_kernel_memory_set(&mut ms).unwrap();
-    unsafe { ms.activate() };
-    info!("kernel memory set init end:\n{:#x?}", ms);
+lazy_static! {
+    #[repr(align(64))]
+    pub static ref KERNEL_MEMORY_SET: Arc<Mutex<MemorySet>> = {
+        let mut ms = MemorySet::new_kernel();
+        init_kernel_memory_set(&mut ms).unwrap();
+        info!("kernel memory set init end:\n{:#x?}", ms);
+        Arc::new(Mutex::new(ms))
+    };
 }
 
-/// Activate the kernel page table on the secondary CPUs.
-pub fn secondary_init() {
+/// Initialize the kernel memory set and activate kernel page table.
+pub fn init() {
     unsafe { KERNEL_MEMORY_SET.lock().activate() };
 }

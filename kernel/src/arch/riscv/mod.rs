@@ -4,8 +4,8 @@ pub mod io;
 pub mod memory;
 mod paging;
 mod sbi;
-mod traps;
 pub mod syscall_ids;
+mod traps;
 
 global_asm!(include_str!("boot/entry.S"));
 

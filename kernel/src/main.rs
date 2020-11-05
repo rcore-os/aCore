@@ -17,6 +17,7 @@ mod error;
 mod lang;
 #[macro_use]
 mod logging;
+mod asynccall;
 mod fs;
 mod memory;
 mod sched;
@@ -68,7 +69,7 @@ pub fn normal_main() -> ! {
 
 pub fn io_main() -> ! {
     info!("Hello, I/O CPU!");
-    unsafe { trapframe::init() };
+    asynccall::init();
     loop {
         arch::cpu::wait_for_interrupt();
     }

@@ -296,3 +296,5 @@
 #define __NR_faccessat2 439
 
 #define __NR_riscv_flush_icache 244 + 15
+
+#define __NR_setup_async_call 500

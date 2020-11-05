@@ -22,3 +22,8 @@ void exit(int code)
 {
     syscall(SYS_exit, code);
 }
+
+void setup_async_call(int arg0, int arg1, uint64_t flags, void* info)
+{
+    syscall(SYS_setup_async_call, arg0, arg1, flags, info);
+}

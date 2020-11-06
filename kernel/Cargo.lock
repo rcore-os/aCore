@@ -85,7 +85,7 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 [[package]]
 name = "executor"
 version = "0.6.0"
-source = "git+https://github.com/rcore-os/executor.git?rev=a2d02ee9#a2d02ee9567973209f557db53adc988dad2095e5"
+source = "git+https://github.com/rcore-os/executor.git?rev=04b6b7b#04b6b7be19fcf755953752abb1d78a118d6dc8f9"
 dependencies = [
  "executor-macros",
  "lazy_static",
@@ -96,7 +96,7 @@ dependencies = [
 [[package]]
 name = "executor-macros"
 version = "0.0.1"
-source = "git+https://github.com/rcore-os/executor.git?rev=a2d02ee9#a2d02ee9567973209f557db53adc988dad2095e5"
+source = "git+https://github.com/rcore-os/executor.git?rev=04b6b7b#04b6b7be19fcf755953752abb1d78a118d6dc8f9"
 dependencies = [
  "proc-macro2",
  "quote",

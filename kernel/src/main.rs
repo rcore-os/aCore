@@ -34,7 +34,7 @@ use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 #[no_mangle]
 pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
     static AP_CAN_INIT: AtomicBool = AtomicBool::new(false);
-    let cpu_id = arch::boot_cpu_id();
+    let cpu_id = arch::cpu::boot_cpu_id();
     if cpu_id == consts::BOOTSTRAP_CPU_ID {
         memory::clear_bss();
         arch::primary_init_early(arg0, arg1);
@@ -70,7 +70,5 @@ pub fn normal_main() -> ! {
 pub fn io_main() -> ! {
     info!("Hello, I/O CPU!");
     asynccall::init();
-    loop {
-        arch::cpu::wait_for_interrupt();
-    }
+    asynccall::run_forever();
 }

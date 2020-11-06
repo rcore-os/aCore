@@ -8,9 +8,12 @@ int main(int argc, char* argv[])
     char str[] = "PID: 0";
     str[5] = getpid() + 48;
     puts(str);
+    sched_yield();
+
     for (int i = 0; i < argc; i++) {
         puts(argv[i]);
     }
+    sched_yield();
 
     struct async_call_info info;
     setup_async_call(0, 0, 0, &info);

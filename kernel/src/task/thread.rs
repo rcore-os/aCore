@@ -90,6 +90,10 @@ impl Thread {
         Ok(th)
     }
 
+    pub fn is_exited(&self) -> bool {
+        self.state.lock().exited
+    }
+
     pub fn exit(&self, _code: usize) {
         self.state.lock().exited = true;
         if self.is_user {

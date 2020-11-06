@@ -1,20 +1,21 @@
+use alloc::sync::Arc;
 use core::convert::TryFrom;
 
 use crate::arch::syscall_ids::SyscallType as Sys;
-use crate::asynccall::{self, AsyncCallInfo};
+use crate::asynccall::{AsyncCall, AsyncCallInfo};
 use crate::error::{AcoreError, AcoreResult};
 use crate::fs::get_file_by_fd;
 use crate::memory::uaccess::{UserInPtr, UserOutPtr};
 use crate::task::Thread;
 
 pub struct Syscall<'a> {
-    thread: &'a Thread,
+    thread: &'a Arc<Thread>,
 }
 
 type SysResult = AcoreResult<usize>;
 
 impl<'a> Syscall<'a> {
-    pub fn new(thread: &'a Thread) -> Self {
+    pub fn new(thread: &'a Arc<Thread>) -> Self {
         Self { thread }
     }
 
@@ -86,7 +87,7 @@ impl Syscall<'_> {
         flags: u64,
         mut out_info: UserOutPtr<AsyncCallInfo>,
     ) -> SysResult {
-        let res = asynccall::setup_async_call(&self.thread, arg0, arg1, flags)?;
+        let res = AsyncCall::setup(&self.thread, arg0, arg1, flags)?;
         info!(
             "setup_async_call: arg0={}, arg1={}, flags={:#x?}, out_info={:#x?}",
             arg0, arg1, flags, res

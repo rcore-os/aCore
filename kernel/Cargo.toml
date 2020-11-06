@@ -15,7 +15,7 @@ trapframe = "0.6"
 numeric-enum-macro = "0.2"
 buddy_system_allocator = "0.5"
 lazy_static = { version = "1.4", features = ["spin_no_std"] }
-executor = { git = "https://github.com/rcore-os/executor.git", rev = "a2d02ee9" }
+executor = { git = "https://github.com/rcore-os/executor.git", rev = "04b6b7b" }
 bitmap-allocator = { git = "https://github.com/rcore-os/bitmap-allocator", rev = "03bd9909" }
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]

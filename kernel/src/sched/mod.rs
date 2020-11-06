@@ -6,7 +6,7 @@ use core::{
 
 use crate::error::AcoreResult;
 
-pub use executor;
+pub use executor::{self, Executor};
 
 #[derive(Default)]
 struct YieldFuture {

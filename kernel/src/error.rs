@@ -13,6 +13,7 @@ pub enum AcoreError {
     NotFound = -8,
     AlreadyExists = -9,
     AccessDenied = -10,
+    Fault = -11,
 }
 
 pub type AcoreResult<T = ()> = Result<T, AcoreError>;

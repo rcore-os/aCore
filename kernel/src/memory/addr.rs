@@ -1,5 +1,6 @@
 //! Definition of phyical and virtual addresses.
 
+use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 
 use super::{PAGE_SIZE, PHYS_VIRT_OFFSET};
@@ -12,7 +13,11 @@ pub struct PageAligned<T>(T);
 
 impl<T> PageAligned<T> {
     pub fn new(inner: T) -> Self {
-        Self(inner)
+        let mut x = MaybeUninit::<Self>::zeroed();
+        unsafe {
+            (*x.as_mut_ptr()).0 = inner;
+            x.assume_init()
+        }
     }
 }
 

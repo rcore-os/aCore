@@ -124,7 +124,7 @@ impl<PT: PageTable> MemorySet<PT> {
             "unhandled page fault @ {:#x?} with access {:?}",
             vaddr, access_flags
         );
-        Err(AcoreError::NotFound)
+        Err(AcoreError::Fault)
     }
 
     /// Clear and unmap all areas.

@@ -20,11 +20,11 @@ impl Default for OwnedResource {
 impl OwnedResource {
     pub fn alloc_async_call_buffer(
         &mut self,
-    ) -> AcoreResult<Option<&Box<PageAligned<AsyncCallBuffer>>>> {
-        if !self.async_buf.is_none() {
+    ) -> AcoreResult<Option<&PageAligned<AsyncCallBuffer>>> {
+        if self.async_buf.is_some() {
             return Err(AcoreError::AlreadyExists);
         }
         self.async_buf = Some(Box::new(PageAligned::new(AsyncCallBuffer::new())));
-        Ok(self.async_buf.as_ref())
+        Ok(self.async_buf.as_deref())
     }
 }

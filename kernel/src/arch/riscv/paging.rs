@@ -112,6 +112,7 @@ impl From<rv::FlagUpdateError> for AcoreError {
         AcoreError::NotFound
     }
 }
+
 impl PageTable for RvPageTable {
     fn new() -> Self {
         let mut root = Frame::new().expect("failed to allocate root frame for page table");

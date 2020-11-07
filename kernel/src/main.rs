@@ -11,8 +11,10 @@ extern crate log;
 extern crate alloc;
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate lazy_static;
 
-mod consts;
+mod config;
 mod error;
 mod lang;
 #[macro_use]
@@ -35,7 +37,7 @@ use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
     static AP_CAN_INIT: AtomicBool = AtomicBool::new(false);
     let cpu_id = arch::cpu::boot_cpu_id();
-    if cpu_id == consts::BOOTSTRAP_CPU_ID {
+    if cpu_id == config::BOOTSTRAP_CPU_ID {
         memory::clear_bss();
         arch::primary_init_early(arg0, arg1);
         logging::init();
@@ -53,8 +55,8 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
     }
     println!("Hello, CPU {}!", cpu_id);
     match cpu_id {
-        consts::NORMAL_CPU_ID => normal_main(),
-        consts::IO_CPU_ID => io_main(),
+        config::NORMAL_CPU_ID => normal_main(),
+        config::IO_CPU_ID => io_main(),
         _ => loop {
             arch::cpu::wait_for_interrupt();
         },

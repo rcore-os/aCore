@@ -14,6 +14,7 @@ pub use super::paging::RvPageTable as ArchPageTable;
 
 pub mod consts {
     pub const KERNEL_HEAP_SIZE: usize = 0x40_0000; // 4 MB
+    pub const PERCPU_KERNEL_STACK_SIZE: usize = 0x4_0000; // 256 KB/CPU
     pub const USER_STACK_SIZE: usize = 0x10_0000; // 1 MB
     pub const USER_STACK_OFFSET: usize = 0x4000_0000 - USER_STACK_SIZE;
     pub const USER_VIRT_ADDR_LIMIT: usize = 0xFFFF_FFFF;

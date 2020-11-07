@@ -4,13 +4,12 @@ use alloc::collections::{btree_map::Entry, BTreeMap};
 use alloc::sync::Arc;
 use core::fmt::{Debug, Formatter, Result};
 
-use lazy_static::lazy_static;
 use spin::Mutex;
 
 use super::addr::{align_down, align_up, virt_to_phys, VirtAddr};
 use super::areas::VmArea;
 use super::paging::{MMUFlags, PageTable};
-use super::USER_VIRT_ADDR_LIMIT;
+use super::{KERNEL_STACK, PAGE_SIZE, USER_VIRT_ADDR_LIMIT};
 use crate::arch::memory::ArchPageTable;
 use crate::error::{AcoreError, AcoreResult};
 
@@ -171,8 +170,6 @@ fn init_kernel_memory_set(ms: &mut MemorySet) -> AcoreResult {
         fn erodata();
         fn sbss();
         fn ebss();
-        fn boot_stack();
-        fn boot_stack_top();
     }
 
     use super::PHYS_VIRT_OFFSET;
@@ -204,13 +201,17 @@ fn init_kernel_memory_set(ms: &mut MemorySet) -> AcoreResult {
         MMUFlags::READ | MMUFlags::WRITE,
         "kbss",
     )?)?;
-    ms.push(VmArea::from_fixed_pma(
-        virt_to_phys(boot_stack as usize),
-        virt_to_phys(boot_stack_top as usize),
-        PHYS_VIRT_OFFSET,
-        MMUFlags::READ | MMUFlags::WRITE,
-        "kstack",
-    )?)?;
+    for stack in &KERNEL_STACK {
+        let per_cpu_stack_bottom = stack.as_ptr() as usize + PAGE_SIZE; // shadow page
+        let per_cpu_stack_top = stack.as_ptr() as usize + stack.len();
+        ms.push(VmArea::from_fixed_pma(
+            virt_to_phys(per_cpu_stack_bottom),
+            virt_to_phys(per_cpu_stack_top),
+            PHYS_VIRT_OFFSET,
+            MMUFlags::READ | MMUFlags::WRITE,
+            "kstack",
+        )?)?;
+    }
     for region in crate::arch::memory::get_phys_memory_regions() {
         ms.push(VmArea::from_fixed_pma(
             region.start,

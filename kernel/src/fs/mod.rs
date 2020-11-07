@@ -2,7 +2,6 @@ mod stdio;
 
 use alloc::boxed::Box;
 
-use lazy_static::lazy_static;
 use spin::Mutex;
 
 use crate::error::AcoreResult;

@@ -80,7 +80,7 @@ impl AsyncCall {
         // spawn async call polling coroutine and notify the I/O CPU
         let ac = Self::new(thread.clone());
         ASYNC_CALL_EXECUTOR.spawn(Box::pin(async move { ac.polling().await }));
-        cpu::send_ipi(crate::consts::IO_CPU_ID);
+        cpu::send_ipi(crate::config::IO_CPU_ID);
 
         Ok(AsyncCallInfo {
             user_buf_ptr,

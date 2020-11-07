@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4"
-spin = "0.6"
+spin = "0.7"
 xmas-elf = "0.7"
 bitflags = "1.2"
 trapframe = "0.6"

@@ -4,7 +4,7 @@ pub fn boot_cpu_id() -> usize {
 
 pub fn id() -> usize {
     let boot_id = boot_cpu_id();
-    if boot_id < crate::consts::MAX_CPU_NUM {
+    if boot_id < crate::config::CPU_NUM {
         boot_id
     } else {
         unsafe { crate::task::current().cpu }

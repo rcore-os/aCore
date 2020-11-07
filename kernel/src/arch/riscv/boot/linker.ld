@@ -23,18 +23,18 @@ SECTIONS
     }
 
     . = ALIGN(4K);
-    .data : {
-        sdata = .;
-        *(.data .data.*)
-        edata = .;
-    }
-
-    . = ALIGN(4K);
     .bss : {
 	    *(.bss.stack)
         sbss = .;
         *(.sbss .bss .bss.*)
         ebss = .;
+    }
+
+    . = ALIGN(4K);
+    .data : {
+        sdata = .;
+        *(.data .data.*)
+        edata = .;
     }
 
     . = ALIGN(4K);

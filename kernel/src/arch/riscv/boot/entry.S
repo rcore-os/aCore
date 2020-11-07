@@ -7,8 +7,8 @@ _start:
 
     # 1. set sp
     add     t0, a0, 1
-    slli    t0, t0, 16
-    la      sp, boot_stack
+    slli    t0, t0, 18
+    la      sp, KERNEL_STACK
     add     sp, sp, t0
 
     # 2. enable paging
@@ -26,13 +26,6 @@ _start:
     add     t0, t0, t1
     add     sp, sp, t1
     jr      t0
-
-    .section .bss.stack
-    .global boot_stack
-    .global boot_stack_top
-boot_stack:
-    .space 64 * 1024 * 2    # 64 K/cores * 2
-boot_stack_top:
 
     .section .data
     .align 12

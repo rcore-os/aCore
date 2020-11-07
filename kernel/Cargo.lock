@@ -12,7 +12,7 @@ dependencies = [
  "log",
  "numeric-enum-macro",
  "riscv",
- "spin 0.6.0",
+ "spin 0.7.0",
  "trapframe",
  "xmas-elf",
 ]
@@ -233,9 +233,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spin"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef7b840d5ef62f81f50649ade37112748461256c64a70bccefeabb4d02c515c5"
+checksum = "652ac3743312871a5fb703f0337e68ffa3cdc28c863efad0b8dc858fa10c991b"
 
 [[package]]
 name = "syn"

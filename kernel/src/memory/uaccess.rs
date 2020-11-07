@@ -47,6 +47,9 @@ pub type UserInPtr<T> = UserPtr<T, In>;
 pub type UserOutPtr<T> = UserPtr<T, Out>;
 pub type UserInOutPtr<T> = UserPtr<T, InOut>;
 
+unsafe impl<T, P: Policy> Send for UserPtr<T, P> {}
+unsafe impl<T, P: Policy> Sync for UserPtr<T, P> {}
+
 impl<T, P: Policy> Debug for UserPtr<T, P> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{:?}", self.ptr)

@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use core::convert::TryFrom;
 
 use crate::arch::syscall_ids::SyscallType as Sys;
-use crate::asynccall::{AsyncCall, AsyncCallInfo};
+use crate::asynccall::{AsyncCall, AsyncCallInfoUser};
 use crate::error::{AcoreError, AcoreResult};
 use crate::fs::get_file_by_fd;
 use crate::memory::uaccess::{UserInPtr, UserOutPtr};
@@ -27,7 +27,7 @@ impl<'a> Syscall<'a> {
                 return -(AcoreError::InvalidArgs as isize);
             }
         };
-        debug!("{:?} => args={:x?}", sys_type, args);
+        debug!("Syscall: {:?} => args={:x?}", sys_type, args);
 
         let [a0, a1, a2, a3, _a4, _a5] = args;
         let ret = match sys_type {
@@ -36,17 +36,21 @@ impl<'a> Syscall<'a> {
             Sys::SCHED_YIELD => self.sys_yield(),
             Sys::GETPID => self.sys_getpid(),
             Sys::EXIT => self.sys_exit(a0),
-            Sys::SETUP_ASYNC_CALL => self.sys_setup_async_call(a0, a1, a2 as _, a3.into()),
+            Sys::SETUP_ASYNC_CALL => self.sys_setup_async_call(a0, a1, a2.into(), a3),
             _ => {
                 warn!("syscall unimplemented: {:?}", sys_type);
                 Err(AcoreError::NotSupported)
             }
         };
 
-        info!("{:?} <= {:?}", sys_type, ret);
+        if ret.is_err() {
+            warn!("Syscall: {:?} <= {:?}", sys_type, ret);
+        } else {
+            info!("Syscall: {:?} <= {:?}", sys_type, ret);
+        }
         match ret {
             Ok(code) => code as isize,
-            Err(err) => -(err as isize),
+            Err(err) => err as isize,
         }
     }
 }
@@ -82,15 +86,18 @@ impl Syscall<'_> {
 
     fn sys_setup_async_call(
         &self,
-        arg0: usize,
-        arg1: usize,
-        flags: u64,
-        mut out_info: UserOutPtr<AsyncCallInfo>,
+        req_capacity: usize,
+        comp_capacity: usize,
+        mut out_info: UserOutPtr<AsyncCallInfoUser>,
+        info_size: usize,
     ) -> SysResult {
-        let res = AsyncCall::setup(&self.thread, arg0, arg1, flags)?;
+        if info_size != core::mem::size_of::<AsyncCallInfoUser>() {
+            return Err(AcoreError::InvalidArgs);
+        }
+        let res = AsyncCall::setup(&self.thread, req_capacity, comp_capacity)?;
         info!(
-            "setup_async_call: arg0={}, arg1={}, flags={:#x?}, out_info={:#x?}",
-            arg0, arg1, flags, res
+            "setup_async_call: req_capacity={}, comp_capacity={}, out_info={:#x?}",
+            req_capacity, comp_capacity, res
         );
         out_info.write(res)?;
         Ok(0)

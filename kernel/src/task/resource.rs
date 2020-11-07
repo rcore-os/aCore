@@ -1,30 +1,18 @@
-use alloc::boxed::Box;
+use spin::Once;
 
 use crate::asynccall::AsyncCallBuffer;
-use crate::error::{AcoreError, AcoreResult};
-use crate::memory::addr::PageAligned;
 
 pub struct OwnedResource {
-    pub async_buf: Option<Box<PageAligned<AsyncCallBuffer>>>,
+    pub async_buf: Once<AsyncCallBuffer>,
 }
 
 #[derive(Default)]
 pub struct SharedResource;
 
-impl Default for OwnedResource {
-    fn default() -> Self {
-        Self { async_buf: None }
-    }
-}
-
 impl OwnedResource {
-    pub fn alloc_async_call_buffer(
-        &mut self,
-    ) -> AcoreResult<Option<&PageAligned<AsyncCallBuffer>>> {
-        if self.async_buf.is_some() {
-            return Err(AcoreError::AlreadyExists);
+    pub fn new() -> Self {
+        Self {
+            async_buf: Once::new(),
         }
-        self.async_buf = Some(Box::new(PageAligned::new(AsyncCallBuffer::new())));
-        Ok(self.async_buf.as_deref())
     }
 }

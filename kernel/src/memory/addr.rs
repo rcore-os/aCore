@@ -1,38 +1,9 @@
 //! Definition of phyical and virtual addresses.
 
-use core::mem::MaybeUninit;
-use core::ops::{Deref, DerefMut};
-
 use super::{PAGE_SIZE, PHYS_VIRT_OFFSET};
 
 pub type VirtAddr = usize;
 pub type PhysAddr = usize;
-
-#[repr(C, align(4096))]
-pub struct PageAligned<T>(T);
-
-impl<T> PageAligned<T> {
-    pub fn new(inner: T) -> Self {
-        let mut x = MaybeUninit::<Self>::zeroed();
-        unsafe {
-            (*x.as_mut_ptr()).0 = inner;
-            x.assume_init()
-        }
-    }
-}
-
-impl<T> Deref for PageAligned<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for PageAligned<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 pub fn phys_to_virt(paddr: PhysAddr) -> VirtAddr {
     paddr + PHYS_VIRT_OFFSET

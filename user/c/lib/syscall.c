@@ -23,7 +23,7 @@ void exit(int code)
     syscall(SYS_exit, code);
 }
 
-void setup_async_call(int arg0, int arg1, uint64_t flags, void* info)
+int setup_async_call(int req_capacity, int comp_capacity, void* info, size_t info_size)
 {
-    syscall(SYS_setup_async_call, arg0, arg1, flags, info);
+    return syscall(SYS_setup_async_call, req_capacity, comp_capacity, info, info_size);
 }

@@ -25,6 +25,7 @@ type ThreadFuturePinned = Pin<Box<ThreadFuture>>;
 struct ThreadState {
     need_sched: bool,
     exited: bool,
+    exit_code: usize,
 }
 
 pub struct Thread<C: ThreadContext = ArchThreadContext> {
@@ -32,8 +33,8 @@ pub struct Thread<C: ThreadContext = ArchThreadContext> {
     pub cpu: usize,
     pub is_user: bool,
     pub vm: Arc<Mutex<MemorySet>>,
-    pub owned_res: Mutex<OwnedResource>,
-    pub shared_res: Arc<Mutex<SharedResource>>,
+    pub owned_res: OwnedResource,
+    pub shared_res: Arc<SharedResource>,
     context: Mutex<Option<Box<C>>>,
     state: Mutex<ThreadState>,
     future: Mutex<ThreadFuturePinned>,
@@ -55,8 +56,8 @@ impl Thread {
             cpu: crate::arch::cpu::id(),
             is_user,
             vm,
-            owned_res: Mutex::new(OwnedResource::default()),
-            shared_res: Arc::new(Mutex::new(SharedResource::default())),
+            owned_res: OwnedResource::new(),
+            shared_res: Arc::new(SharedResource::default()),
             context: Mutex::new(None),
             state: Mutex::new(ThreadState::default()),
             future: Mutex::new(Box::pin(async { Ok(()) })),
@@ -93,10 +94,11 @@ impl Thread {
         self.state.lock().exited
     }
 
-    pub fn exit(&self, _code: usize) {
-        self.state.lock().exited = true;
-        if self.is_user {
-            self.vm.lock().clear(); // remove all user mappings
+    pub fn exit(&self, code: usize) {
+        let mut state = self.state.lock();
+        if !state.exited {
+            state.exited = true;
+            state.exit_code = code;
         }
     }
 
@@ -181,7 +183,19 @@ impl Future for ThreadSwitchFuture {
             self.0.vm.lock().activate();
         }
         self.0.future.lock().as_mut().poll(cx).map(|res| {
-            info!("thread {} exited with {:?}.", self.0.id, res);
+            let exit_code = match res {
+                Ok(_) => 0,
+                Err(err) => err as usize,
+            };
+            self.0.exit(exit_code);
+            info!(
+                "thread {} exited with {:?}.",
+                self.0.id,
+                self.0.state.lock().exit_code
+            );
+            if self.0.is_user {
+                self.0.vm.lock().clear(); // remove all user mappings
+            }
             THREAD_POOL.lock().remove(&self.0.id);
             // add to zombie thread list, it will finally drop in idle thread
             ZOMBIES.lock().push(self.0.clone());

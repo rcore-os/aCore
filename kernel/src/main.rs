@@ -12,6 +12,8 @@ extern crate alloc;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
+extern crate memoffset;
+#[macro_use]
 extern crate lazy_static;
 
 mod config;

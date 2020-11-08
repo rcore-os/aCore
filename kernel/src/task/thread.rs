@@ -56,7 +56,7 @@ impl Thread {
             cpu: crate::arch::cpu::id(),
             is_user,
             vm,
-            owned_res: OwnedResource::new(),
+            owned_res: OwnedResource::default(),
             shared_res: Arc::new(SharedResource::default()),
             context: Mutex::new(None),
             state: Mutex::new(ThreadState::default()),
@@ -129,7 +129,7 @@ impl Thread {
             }
             if state.need_sched {
                 state.need_sched = false;
-                yield_now().await?;
+                yield_now().await;
             }
         }
         Ok(())
@@ -211,6 +211,6 @@ pub async fn idle() -> AcoreResult {
             info!("no threads to run, waiting for interrupt...");
             crate::arch::cpu::wait_for_interrupt();
         }
-        yield_now().await?;
+        yield_now().await;
     }
 }

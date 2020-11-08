@@ -4,8 +4,6 @@ use core::{
     task::{Context, Poll},
 };
 
-use crate::error::AcoreResult;
-
 pub use executor::{self, Executor};
 
 #[derive(Default)]
@@ -14,11 +12,11 @@ struct YieldFuture {
 }
 
 impl Future for YieldFuture {
-    type Output = AcoreResult;
+    type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         if self.flag {
-            Poll::Ready(Ok(()))
+            Poll::Ready(())
         } else {
             self.flag = true;
             cx.waker().clone().wake();
@@ -27,6 +25,6 @@ impl Future for YieldFuture {
     }
 }
 
-pub fn yield_now() -> impl Future<Output = AcoreResult> {
+pub fn yield_now() -> impl Future<Output = ()> {
     YieldFuture::default()
 }

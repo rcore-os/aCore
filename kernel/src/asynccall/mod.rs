@@ -40,7 +40,7 @@ impl AsyncCall {
         comp_capacity: usize,
     ) -> AcoreResult<AsyncCallInfoUser> {
         // create shared memory
-        if thread.owned_res.async_buf.get().is_some() {
+        if thread.owned_res.async_buf.lock().is_some() {
             return Err(AcoreError::AlreadyExists);
         }
         let buf = AsyncCallBuffer::new(req_capacity, comp_capacity)?;
@@ -62,7 +62,7 @@ impl AsyncCall {
         )?;
         vm.push(vma)?;
         let info = buf.fill_user_info(user_buf_ptr);
-        thread.owned_res.async_buf.call_once(|| buf);
+        *thread.owned_res.async_buf.lock() = Some(buf);
 
         // spawn async call polling coroutine and notify the I/O CPU
         let ac = Self::new(thread.clone());
@@ -111,7 +111,8 @@ impl AsyncCall {
     async fn polling(&self) {
         info!("start async call polling for thread {}...", self.thread.id);
         while !self.thread.is_exited() {
-            let buf = match self.thread.owned_res.async_buf.get() {
+            let buf_lock = self.thread.owned_res.async_buf.lock();
+            let buf = match buf_lock.as_ref() {
                 Some(b) => b,
                 None => break,
             };
@@ -127,7 +128,7 @@ impl AsyncCall {
                 let res = self.do_async_call(&req).await;
                 while cached_comp_tail - buf.comp_ring_head() == buf.comp_capacity {
                     // TODO: barriers
-                    yield_now().await.unwrap();
+                    yield_now().await;
                 }
                 *buf.comp_entry_at(cached_comp_tail) = CompleteRingEntry::new(req.user_data, res);
                 cached_comp_tail += 1;
@@ -135,7 +136,7 @@ impl AsyncCall {
                 cached_req_head += 1;
             }
             *buf.req_ring_head() = cached_req_head;
-            yield_now().await.unwrap();
+            yield_now().await;
         }
         info!("async call polling for thread {} is done.", self.thread.id);
     }

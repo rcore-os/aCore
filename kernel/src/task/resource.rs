@@ -1,18 +1,11 @@
-use spin::Once;
+use spin::Mutex;
 
 use crate::asynccall::AsyncCallBuffer;
 
+#[derive(Default)]
 pub struct OwnedResource {
-    pub async_buf: Once<AsyncCallBuffer>,
+    pub async_buf: Mutex<Option<AsyncCallBuffer>>,
 }
 
 #[derive(Default)]
 pub struct SharedResource;
-
-impl OwnedResource {
-    pub fn new() -> Self {
-        Self {
-            async_buf: Once::new(),
-        }
-    }
-}

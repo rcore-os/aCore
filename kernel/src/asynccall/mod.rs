@@ -15,7 +15,7 @@ use crate::memory::{
 };
 use crate::sched::{yield_now, Executor};
 use crate::task::Thread;
-use structs::{AsyncCallType, CompleteRingEntry, RequestRingEntry};
+use structs::{AsyncCallType, CompletionRingEntry, RequestRingEntry};
 
 pub use structs::{AsyncCallBuffer, AsyncCallInfoUser};
 
@@ -73,6 +73,9 @@ impl AsyncCall {
     }
 
     async fn do_async_call(&self, req: &RequestRingEntry) -> AsyncCallResult {
+        if self.thread.is_exited() {
+            return Err(AcoreError::BadState);
+        }
         let ac_type = match AsyncCallType::try_from(req.opcode) {
             Ok(t) => t,
             Err(_) => {
@@ -108,35 +111,44 @@ impl AsyncCall {
         ret
     }
 
+    async fn polling_once(&self) -> AcoreResult {
+        let buf_lock = self.thread.owned_res.async_buf.lock();
+        let buf = match buf_lock.as_ref() {
+            Some(b) => b,
+            None => return Err(AcoreError::BadState),
+        };
+        debug!("thread {}: {:#x?}", self.thread.id, buf.as_raw());
+
+        let mut cached_req_head = buf.read_req_ring_head();
+        let mut cached_comp_tail = buf.read_comp_ring_tail();
+        let req_count = buf.request_count(cached_req_head)?;
+        for _ in 0..req_count {
+            if self.thread.is_exited() {
+                break;
+            }
+            let req_entry = buf.req_entry_at(cached_req_head);
+            let res = self.do_async_call(&req_entry).await;
+            while buf.completion_count(cached_comp_tail)? == buf.comp_capacity {
+                yield_now().await;
+            }
+            *buf.comp_entry_at(cached_comp_tail) =
+                CompletionRingEntry::new(req_entry.user_data, res);
+            cached_comp_tail += 1;
+            buf.write_comp_ring_tail(cached_comp_tail);
+            cached_req_head += 1;
+        }
+        buf.write_req_ring_head(cached_req_head);
+        Ok(())
+    }
+
     async fn polling(&self) {
         info!("start async call polling for thread {}...", self.thread.id);
         while !self.thread.is_exited() {
-            let buf_lock = self.thread.owned_res.async_buf.lock();
-            let buf = match buf_lock.as_ref() {
-                Some(b) => b,
-                None => break,
-            };
-            debug!("thread {}: {:#x?}", self.thread.id, buf.as_raw());
-
-            let mut cached_req_head = *buf.req_ring_head();
-            let mut cached_comp_tail = *buf.comp_ring_tail();
-            while cached_req_head < buf.req_ring_tail() {
-                if self.thread.is_exited() {
-                    break;
-                }
-                let req = buf.req_entry_at(cached_req_head);
-                let res = self.do_async_call(&req).await;
-                while cached_comp_tail - buf.comp_ring_head() == buf.comp_capacity {
-                    // TODO: barriers
-                    yield_now().await;
-                }
-                *buf.comp_entry_at(cached_comp_tail) = CompleteRingEntry::new(req.user_data, res);
-                cached_comp_tail += 1;
-                *buf.comp_ring_tail() = cached_comp_tail;
-                cached_req_head += 1;
+            let res = self.polling_once().await;
+            if let Err(e) = res {
+                self.thread.exit(e as usize);
+                break;
             }
-            *buf.req_ring_head() = cached_req_head;
-            yield_now().await;
         }
         info!("async call polling for thread {} is done.", self.thread.id);
     }

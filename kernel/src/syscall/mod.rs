@@ -19,12 +19,15 @@ impl<'a> Syscall<'a> {
         Self { thread }
     }
 
-    pub fn syscall(&mut self, num: u32, args: [usize; 6]) -> isize {
+    pub fn syscall(&self, num: u32, args: [usize; 6]) -> SysResult {
+        if self.thread.is_exited() {
+            return Err(AcoreError::BadState);
+        }
         let sys_type = match Sys::try_from(num) {
             Ok(t) => t,
             Err(_) => {
                 error!("invalid syscall number: {}", num);
-                return -(AcoreError::InvalidArgs as isize);
+                return Err(AcoreError::InvalidArgs);
             }
         };
         debug!("Syscall: {:?} => args={:x?}", sys_type, args);
@@ -48,10 +51,7 @@ impl<'a> Syscall<'a> {
         } else {
             info!("Syscall: {:?} <= {:?}", sys_type, ret);
         }
-        match ret {
-            Ok(code) => code as isize,
-            Err(err) => err as isize,
-        }
+        ret
     }
 }
 

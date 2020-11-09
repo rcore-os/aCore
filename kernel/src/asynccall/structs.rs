@@ -1,5 +1,4 @@
 use core::mem::size_of;
-use core::slice;
 
 use numeric_enum_macro::numeric_enum;
 
@@ -36,27 +35,30 @@ pub(super) struct RequestRingEntry {
 
 #[repr(C)]
 #[derive(Debug, Default)]
-pub(super) struct CompleteRingEntry {
+pub(super) struct CompletionRingEntry {
     user_data: u64,
     result: i32,
     _pad0: u32,
 }
 
+// TODO: cache line aligned for each fields
 #[repr(C)]
 #[derive(Debug)]
 pub(super) struct Ring {
-    head: usize,
-    tail: usize,
-    capacity: usize,
+    head: u32,
+    tail: u32,
+    capacity: u32,
+    capacity_mask: u32,
 }
 
+// TODO: cache line aligned for each fields
 #[repr(C)]
 #[derive(Debug)]
 pub(super) struct AsyncCallBufferLayout {
     req_ring: Ring,
     comp_ring: Ring,
     req_entries: [RequestRingEntry; 0],
-    comp_entries: [CompleteRingEntry; 0],
+    comp_entries: [CompletionRingEntry; 0],
 }
 
 #[repr(C)]
@@ -65,6 +67,7 @@ struct RingOffsets {
     head: u32,
     tail: u32,
     capacity: u32,
+    capacity_mask: u32,
     entries: u32,
 }
 
@@ -80,13 +83,15 @@ pub struct AsyncCallInfoUser {
 #[repr(C)]
 #[derive(Debug)]
 pub struct AsyncCallBuffer {
-    pub req_capacity: usize,
-    pub comp_capacity: usize,
+    pub req_capacity: u32,
+    pub comp_capacity: u32,
+    req_capacity_mask: u32,
+    comp_capacity_mask: u32,
     buf_size: usize,
     frame: Frame,
 }
 
-impl CompleteRingEntry {
+impl CompletionRingEntry {
     pub fn new(user_data: u64, res: AsyncCallResult) -> Self {
         Self {
             user_data,
@@ -107,11 +112,11 @@ impl AsyncCallBuffer {
         if comp_capacity == 0 || comp_capacity > MAX_ENTRY_COUNT {
             return Err(AcoreError::InvalidArgs);
         }
-        let req_capacity = req_capacity.next_power_of_two();
-        let comp_capacity = comp_capacity.next_power_of_two();
+        let req_capacity = req_capacity.next_power_of_two() as u32;
+        let comp_capacity = comp_capacity.next_power_of_two() as u32;
         let buf_size = size_of::<AsyncCallBufferLayout>()
-            + size_of::<RequestRingEntry>() * req_capacity
-            + size_of::<CompleteRingEntry>() * comp_capacity;
+            + size_of::<RequestRingEntry>() * req_capacity as usize
+            + size_of::<CompletionRingEntry>() * comp_capacity as usize;
 
         let mut frame = Frame::new_contiguous(page_count(buf_size), 0)?;
         frame.zero();
@@ -119,10 +124,14 @@ impl AsyncCallBuffer {
         let buf = unsafe { &mut *(frame.as_mut_ptr() as *mut AsyncCallBufferLayout) };
         buf.req_ring.capacity = req_capacity;
         buf.comp_ring.capacity = comp_capacity;
+        buf.req_ring.capacity_mask = req_capacity - 1;
+        buf.comp_ring.capacity_mask = comp_capacity - 1;
 
         Ok(Self {
             req_capacity,
             comp_capacity,
+            req_capacity_mask: req_capacity - 1,
+            comp_capacity_mask: comp_capacity - 1,
             buf_size,
             frame,
         })
@@ -141,6 +150,8 @@ impl AsyncCallBuffer {
                 tail: (offset_of!(AsyncCallBufferLayout, req_ring) + offset_of!(Ring, tail)) as _,
                 capacity: (offset_of!(AsyncCallBufferLayout, req_ring) + offset_of!(Ring, capacity))
                     as _,
+                capacity_mask: (offset_of!(AsyncCallBufferLayout, req_ring)
+                    + offset_of!(Ring, capacity_mask)) as _,
                 entries: offset_of!(AsyncCallBufferLayout, req_entries) as _,
             },
             comp_off: RingOffsets {
@@ -148,49 +159,75 @@ impl AsyncCallBuffer {
                 tail: (offset_of!(AsyncCallBufferLayout, comp_ring) + offset_of!(Ring, tail)) as _,
                 capacity: (offset_of!(AsyncCallBufferLayout, comp_ring)
                     + offset_of!(Ring, capacity)) as _,
+                capacity_mask: (offset_of!(AsyncCallBufferLayout, comp_ring)
+                    + offset_of!(Ring, capacity_mask)) as _,
                 entries: (offset_of!(AsyncCallBufferLayout, req_entries)
-                    + size_of::<RequestRingEntry>() * self.req_capacity)
+                    + size_of::<RequestRingEntry>() * self.req_capacity as usize)
                     as _,
             },
         }
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub(super) fn req_ring_head(&self) -> &mut usize {
-        &mut self.as_raw_mut().req_ring.head
-    }
-
-    pub(super) fn req_ring_tail(&self) -> usize {
-        self.as_raw().req_ring.tail
-    }
-
-    pub(super) fn comp_ring_head(&self) -> usize {
+    pub(super) fn read_req_ring_head(&self) -> u32 {
         self.as_raw().req_ring.head
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub(super) fn comp_ring_tail(&self) -> &mut usize {
-        &mut self.as_raw_mut().comp_ring.tail
+    pub(super) fn write_req_ring_head(&self, new_head: u32) {
+        self.as_raw_mut().req_ring.head = new_head
     }
 
-    pub(super) fn req_entry_at(&self, idx: usize) -> &RequestRingEntry {
+    pub(super) fn read_req_ring_tail(&self) -> u32 {
+        self.as_raw().req_ring.tail
+    }
+
+    pub(super) fn request_count(&self, cached_req_ring_head: u32) -> AcoreResult<u32> {
+        let n = self.read_req_ring_tail().wrapping_sub(cached_req_ring_head);
+        if n <= self.req_capacity {
+            Ok(n)
+        } else {
+            Err(AcoreError::BadState)
+        }
+    }
+
+    pub(super) fn read_comp_ring_head(&self) -> u32 {
+        self.as_raw().req_ring.head
+    }
+
+    pub(super) fn read_comp_ring_tail(&self) -> u32 {
+        self.as_raw().comp_ring.tail
+    }
+
+    pub(super) fn write_comp_ring_tail(&self, new_tail: u32) {
+        self.as_raw_mut().comp_ring.tail = new_tail
+    }
+
+    pub(super) fn completion_count(&self, cached_comp_ring_tail: u32) -> AcoreResult<u32> {
+        let n = cached_comp_ring_tail.wrapping_sub(self.read_comp_ring_head());
+        if n <= self.comp_capacity {
+            Ok(n)
+        } else {
+            Err(AcoreError::BadState)
+        }
+    }
+
+    pub(super) fn req_entry_at(&self, idx: u32) -> &RequestRingEntry {
         unsafe {
             let ptr = self
                 .as_ptr::<u8>()
                 .add(offset_of!(AsyncCallBufferLayout, req_entries))
                 as *const RequestRingEntry;
-            &slice::from_raw_parts(ptr, self.req_capacity)[idx]
+            &*ptr.add((idx & self.req_capacity_mask) as usize)
         }
     }
 
     #[allow(clippy::mut_from_ref)]
-    pub(super) fn comp_entry_at(&self, idx: usize) -> &mut CompleteRingEntry {
+    pub(super) fn comp_entry_at(&self, idx: u32) -> &mut CompletionRingEntry {
         unsafe {
             let ptr = self.as_mut_ptr::<u8>().add(
                 offset_of!(AsyncCallBufferLayout, req_entries)
-                    + size_of::<RequestRingEntry>() * self.req_capacity,
-            ) as *mut CompleteRingEntry;
-            &mut slice::from_raw_parts_mut(ptr, self.comp_capacity)[idx]
+                    + size_of::<RequestRingEntry>() * self.req_capacity as usize,
+            ) as *mut CompletionRingEntry;
+            &mut *ptr.add((idx & self.comp_capacity_mask) as usize)
         }
     }
 

@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
     async_call_buffer_init(16, 16, &buffer);
     for (int i = 0; i < 10; i++) {
         int cached_tail = *buffer.req_ring.ktail;
-        struct request_ring_entry* req = request_ring_get_entry(&buffer, cached_tail);
+        struct req_ring_entry* req = req_ring_get_entry(&buffer, cached_tail);
         req->user_data = 0x1000 + i;
         char str[] = "Hello, async call!\n";
         async_call_write(req, stdout, str, strlen(str), 0);
@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
         __sync_synchronize();
         while (*buffer.comp_ring.khead < *buffer.comp_ring.ktail) {
             int cached_head = *buffer.comp_ring.khead;
-            struct complete_ring_entry* comp = complete_ring_get_entry(&buffer, cached_head);
+            struct comp_ring_entry* comp = comp_ring_get_entry(&buffer, cached_head);
             if (comp->user_data != 0x1000 + cached_head) {
                 return 1;
             }

@@ -71,7 +71,10 @@ impl Thread {
     fn handle_syscall(self: &Arc<Self>, ctx: &mut Box<impl ThreadContext>) -> AcoreResult {
         let num = ctx.get_syscall_num() as u32;
         let args = ctx.get_syscall_args();
-        let ret = Syscall::new(&self).syscall(num, args) as usize;
+        let ret = match Syscall::new(&self).syscall(num, args) {
+            Ok(code) => code,
+            Err(err) => err as usize,
+        };
         ctx.set_syscall_ret(ret);
         Ok(())
     }

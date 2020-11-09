@@ -1,10 +1,11 @@
+use core::intrinsics::{atomic_load_acq, atomic_store_rel};
 use core::mem::size_of;
 
 use numeric_enum_macro::numeric_enum;
 
 use super::AsyncCallResult;
 use crate::error::{AcoreError, AcoreResult};
-use crate::memory::{addr::page_count, Frame};
+use crate::memory::{addr::page_count, Frame, VirtAddr};
 
 const MAX_ENTRY_COUNT: usize = 32768;
 
@@ -89,6 +90,7 @@ pub struct AsyncCallBuffer {
     comp_capacity_mask: u32,
     buf_size: usize,
     frame: Frame,
+    frame_virt_addr: VirtAddr,
 }
 
 impl CompletionRingEntry {
@@ -120,6 +122,7 @@ impl AsyncCallBuffer {
 
         let mut frame = Frame::new_contiguous(page_count(buf_size), 0)?;
         frame.zero();
+        let frame_virt_addr = frame.as_ptr() as usize;
 
         let buf = unsafe { &mut *(frame.as_mut_ptr() as *mut AsyncCallBufferLayout) };
         buf.req_ring.capacity = req_capacity;
@@ -134,6 +137,7 @@ impl AsyncCallBuffer {
             comp_capacity_mask: comp_capacity - 1,
             buf_size,
             frame,
+            frame_virt_addr,
         })
     }
 
@@ -173,11 +177,11 @@ impl AsyncCallBuffer {
     }
 
     pub(super) fn write_req_ring_head(&self, new_head: u32) {
-        self.as_raw_mut().req_ring.head = new_head
+        unsafe { atomic_store_rel(&mut self.as_raw_mut().req_ring.head as _, new_head) }
     }
 
     pub(super) fn read_req_ring_tail(&self) -> u32 {
-        self.as_raw().req_ring.tail
+        unsafe { atomic_load_acq(&self.as_raw().req_ring.tail as _) }
     }
 
     pub(super) fn request_count(&self, cached_req_ring_head: u32) -> AcoreResult<u32> {
@@ -190,7 +194,7 @@ impl AsyncCallBuffer {
     }
 
     pub(super) fn read_comp_ring_head(&self) -> u32 {
-        self.as_raw().req_ring.head
+        unsafe { atomic_load_acq(&self.as_raw().comp_ring.head as _) }
     }
 
     pub(super) fn read_comp_ring_tail(&self) -> u32 {
@@ -198,7 +202,7 @@ impl AsyncCallBuffer {
     }
 
     pub(super) fn write_comp_ring_tail(&self, new_tail: u32) {
-        self.as_raw_mut().comp_ring.tail = new_tail
+        unsafe { atomic_store_rel(&mut self.as_raw_mut().comp_ring.tail as _, new_tail) }
     }
 
     pub(super) fn completion_count(&self, cached_comp_ring_tail: u32) -> AcoreResult<u32> {
@@ -232,11 +236,11 @@ impl AsyncCallBuffer {
     }
 
     pub(super) fn as_ptr<T>(&self) -> *const T {
-        self.frame.as_ptr() as _
+        self.frame_virt_addr as _
     }
 
     fn as_mut_ptr<T>(&self) -> *mut T {
-        self.frame.as_mut_ptr() as _
+        self.frame_virt_addr as _
     }
 
     pub(super) fn as_raw(&self) -> &AsyncCallBufferLayout {

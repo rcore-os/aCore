@@ -1,4 +1,5 @@
 #include <asynccall.h>
+#include <barrier.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -24,18 +25,17 @@ int main(int argc, char* argv[])
         req->user_data = 0x1000 + i;
         char str[] = "Hello, async call!\n";
         async_call_write(req, stdout, str, strlen(str), 0);
-        *buffer.req_ring.ktail = cached_tail + 1;
+        smp_store_release(buffer.req_ring.ktail, cached_tail + 1);
     }
 
-    while (*buffer.comp_ring.ktail < 10) {
-        __sync_synchronize();
-        while (*buffer.comp_ring.khead < *buffer.comp_ring.ktail) {
+    while (smp_load_acquire(buffer.comp_ring.ktail) < 10) {
+        while (*buffer.comp_ring.khead < smp_load_acquire(buffer.comp_ring.ktail)) {
             int cached_head = *buffer.comp_ring.khead;
             struct comp_ring_entry* comp = comp_ring_get_entry(&buffer, cached_head);
             if (comp->user_data != 0x1000 + cached_head) {
                 return 1;
             }
-            *buffer.comp_ring.khead = cached_head + 1;
+            smp_store_release(buffer.comp_ring.khead, cached_head + 1);
         }
     }
 

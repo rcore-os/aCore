@@ -4,6 +4,7 @@
 #![feature(llvm_asm)]
 #![feature(global_asm)]
 #![feature(lang_items)]
+#![feature(core_intrinsics)]
 
 #[macro_use]
 extern crate log;
@@ -46,9 +47,9 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
         memory::init();
         unsafe { trapframe::init() };
         arch::primary_init(arg0, arg1);
-        AP_CAN_INIT.store(true, Ordering::Relaxed);
+        AP_CAN_INIT.store(true, Ordering::Release);
     } else {
-        while !AP_CAN_INIT.load(Ordering::Relaxed) {
+        while !AP_CAN_INIT.load(Ordering::Acquire) {
             spin_loop_hint();
         }
         memory::secondary_init();

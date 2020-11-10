@@ -6,7 +6,7 @@ use core::convert::From;
 use crate::error::{AcoreError, AcoreResult};
 use crate::fs::File;
 use crate::memory::addr::{page_count, page_offset, VirtAddr};
-use crate::memory::areas::{PmArea, PmAreaDelay, VmArea};
+use crate::memory::areas::{PmArea, PmAreaLazy, VmArea};
 use crate::memory::{MMUFlags, MemorySet, PAGE_SIZE, USER_STACK_OFFSET, USER_STACK_SIZE};
 
 use spin::Mutex;
@@ -67,7 +67,7 @@ impl<'a> ElfLoader<'a> {
 
             let pgoff = page_offset(ph.virtual_addr() as usize);
             let page_count = page_count(ph.mem_size() as usize + pgoff);
-            let mut pma = PmAreaDelay::new(page_count)?;
+            let mut pma = PmAreaLazy::new(page_count)?;
             let data = match ph.get_data(&self.elf).unwrap() {
                 SegmentData::Undefined(data) => data,
                 _ => return Err(AcoreError::InvalidArgs),
@@ -91,7 +91,7 @@ impl<'a> ElfLoader<'a> {
         let entry = self.elf.header.pt2.entry_point() as usize;
         let stack_bottom = USER_STACK_OFFSET;
         let mut stack_top = stack_bottom + USER_STACK_SIZE;
-        let mut stack_pma = PmAreaDelay::new(page_count(USER_STACK_SIZE))?;
+        let mut stack_pma = PmAreaLazy::new(page_count(USER_STACK_SIZE))?;
 
         // push `ProcInitInfo` to user stack
         let info = abi::ProcInitInfo {

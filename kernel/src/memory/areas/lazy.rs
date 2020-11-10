@@ -10,12 +10,12 @@ use crate::memory::{
     Frame, MMUFlags, PhysAddr, VirtAddr, PAGE_SIZE,
 };
 
-/// A discontiguous PMA which perform delay allocation (e.g. in page fault handler).
-pub struct PmAreaDelay {
+/// A discontiguous PMA which perform lazy allocation (e.g. in page fault handler).
+pub struct PmAreaLazy {
     frames: Vec<Option<Frame>>,
 }
 
-impl PmArea for PmAreaDelay {
+impl PmArea for PmAreaLazy {
     fn size(&self) -> usize {
         self.frames.len() * PAGE_SIZE
     }
@@ -51,11 +51,11 @@ impl PmArea for PmAreaDelay {
     }
 }
 
-impl PmAreaDelay {
+impl PmAreaLazy {
     pub fn new(page_count: usize) -> AcoreResult<Self> {
         if page_count == 0 {
             warn!(
-                "page_count cannot be 0 in PmAreaDelay::new(): {:#x?}",
+                "page_count cannot be 0 in PmAreaLazy::new(): {:#x?}",
                 page_count
             );
             return Err(AcoreError::InvalidArgs);
@@ -75,7 +75,7 @@ impl PmAreaDelay {
     ) -> AcoreResult {
         if offset >= self.size() {
             warn!(
-                "out of range in PmAreaDelay::for_each_frame(): offset={:#x?}, {:#x?}",
+                "out of range in PmAreaLazy::for_each_frame(): offset={:#x?}, {:#x?}",
                 offset, self
             );
             return Err(AcoreError::OutOfRange);
@@ -106,9 +106,9 @@ impl PmAreaDelay {
     }
 }
 
-impl Debug for PmAreaDelay {
+impl Debug for PmAreaLazy {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        f.debug_struct("PmAreaDelay")
+        f.debug_struct("PmAreaLazy")
             .field("size", &self.size())
             .finish()
     }
@@ -125,7 +125,7 @@ impl VmArea {
             start_vaddr,
             start_vaddr + size,
             flags,
-            Arc::new(Mutex::new(PmAreaDelay::new(size)?)),
+            Arc::new(Mutex::new(PmAreaLazy::new(size)?)),
             name,
         )
     }

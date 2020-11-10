@@ -1,8 +1,8 @@
-mod delay;
 mod fixed;
+mod lazy;
 
-pub use delay::PmAreaDelay;
 pub use fixed::PmAreaFixed;
+pub use lazy::PmAreaLazy;
 
 use alloc::sync::Arc;
 
@@ -13,7 +13,7 @@ use super::paging::{MMUFlags, PageTable};
 use super::PAGE_SIZE;
 use crate::error::{AcoreError, AcoreResult};
 
-/// A physical memory area with same MMU flags, can be discontiguous and delay allocated,
+/// A physical memory area with same MMU flags, can be discontiguous and lazy allocated,
 /// or shared by multi-threads.
 pub trait PmArea: core::fmt::Debug + Send + Sync {
     /// Size of total physical memory.

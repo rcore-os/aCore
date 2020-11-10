@@ -35,6 +35,7 @@ pub trait ThreadContext: core::fmt::Debug + Send + Sync {
     fn end_trap(&mut self, trap: TrapReason);
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum TrapReason {
     Syscall,

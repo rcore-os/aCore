@@ -4,6 +4,7 @@
 
 pub mod addr;
 pub mod areas;
+pub mod cache;
 mod frame;
 mod heap;
 mod paging;

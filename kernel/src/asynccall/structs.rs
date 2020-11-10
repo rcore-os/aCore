@@ -5,6 +5,7 @@ use numeric_enum_macro::numeric_enum;
 
 use super::AsyncCallResult;
 use crate::error::{AcoreError, AcoreResult};
+use crate::memory::cache::{alignup_cache_line, is_cache_line_aligned, AlignCacheLine};
 use crate::memory::{addr::page_count, Frame, VirtAddr};
 
 const MAX_ENTRY_COUNT: usize = 32768;
@@ -42,24 +43,24 @@ pub(super) struct CompletionRingEntry {
     _pad0: u32,
 }
 
-// TODO: cache line aligned for each fields
 #[repr(C)]
 #[derive(Debug)]
 pub(super) struct Ring {
-    head: u32,
-    tail: u32,
-    capacity: u32,
-    capacity_mask: u32,
+    head: AlignCacheLine<u32>,
+    tail: AlignCacheLine<u32>,
 }
 
-// TODO: cache line aligned for each fields
 #[repr(C)]
 #[derive(Debug)]
 pub(super) struct AsyncCallBufferLayout {
     req_ring: Ring,
     comp_ring: Ring,
-    req_entries: [RequestRingEntry; 0],
-    comp_entries: [CompletionRingEntry; 0],
+    req_capacity: u32,
+    req_capacity_mask: u32,
+    comp_capacity: u32,
+    comp_capacity_mask: u32,
+    req_entries: AlignCacheLine<[RequestRingEntry; 0]>,
+    comp_entries: AlignCacheLine<[CompletionRingEntry; 0]>,
 }
 
 #[repr(C)]
@@ -116,19 +117,24 @@ impl AsyncCallBuffer {
         }
         let req_capacity = req_capacity.next_power_of_two() as u32;
         let comp_capacity = comp_capacity.next_power_of_two() as u32;
-        let buf_size = size_of::<AsyncCallBufferLayout>()
-            + size_of::<RequestRingEntry>() * req_capacity as usize
-            + size_of::<CompletionRingEntry>() * comp_capacity as usize;
+
+        let req_entries_off = offset_of!(AsyncCallBufferLayout, req_entries);
+        let comp_entries_off = alignup_cache_line(
+            req_entries_off + size_of::<RequestRingEntry>() * req_capacity as usize,
+        );
+        let buf_size = comp_entries_off + size_of::<CompletionRingEntry>() * comp_capacity as usize;
+        debug_assert!(is_cache_line_aligned(req_entries_off));
+        debug_assert!(is_cache_line_aligned(comp_entries_off));
 
         let mut frame = Frame::new_contiguous(page_count(buf_size), 0)?;
         frame.zero();
         let frame_virt_addr = frame.as_ptr() as usize;
 
         let buf = unsafe { &mut *(frame.as_mut_ptr() as *mut AsyncCallBufferLayout) };
-        buf.req_ring.capacity = req_capacity;
-        buf.comp_ring.capacity = comp_capacity;
-        buf.req_ring.capacity_mask = req_capacity - 1;
-        buf.comp_ring.capacity_mask = comp_capacity - 1;
+        buf.req_capacity = req_capacity;
+        buf.comp_capacity = comp_capacity;
+        buf.req_capacity_mask = req_capacity - 1;
+        buf.comp_capacity_mask = comp_capacity - 1;
 
         Ok(Self {
             req_capacity,
@@ -146,42 +152,40 @@ impl AsyncCallBuffer {
     }
 
     pub(super) fn fill_user_info(&self, user_buf_ptr: usize) -> AsyncCallInfoUser {
+        let req_entries_off = offset_of!(AsyncCallBufferLayout, req_entries);
+        let comp_entries_off = alignup_cache_line(
+            req_entries_off + size_of::<RequestRingEntry>() * self.req_capacity as usize,
+        );
         AsyncCallInfoUser {
             user_buf_ptr,
             buf_size: self.buf_size,
             req_off: RingOffsets {
                 head: (offset_of!(AsyncCallBufferLayout, req_ring) + offset_of!(Ring, head)) as _,
                 tail: (offset_of!(AsyncCallBufferLayout, req_ring) + offset_of!(Ring, tail)) as _,
-                capacity: (offset_of!(AsyncCallBufferLayout, req_ring) + offset_of!(Ring, capacity))
-                    as _,
-                capacity_mask: (offset_of!(AsyncCallBufferLayout, req_ring)
-                    + offset_of!(Ring, capacity_mask)) as _,
-                entries: offset_of!(AsyncCallBufferLayout, req_entries) as _,
+                capacity: offset_of!(AsyncCallBufferLayout, req_capacity) as _,
+                capacity_mask: offset_of!(AsyncCallBufferLayout, req_capacity_mask) as _,
+                entries: req_entries_off as _,
             },
             comp_off: RingOffsets {
                 head: (offset_of!(AsyncCallBufferLayout, comp_ring) + offset_of!(Ring, head)) as _,
                 tail: (offset_of!(AsyncCallBufferLayout, comp_ring) + offset_of!(Ring, tail)) as _,
-                capacity: (offset_of!(AsyncCallBufferLayout, comp_ring)
-                    + offset_of!(Ring, capacity)) as _,
-                capacity_mask: (offset_of!(AsyncCallBufferLayout, comp_ring)
-                    + offset_of!(Ring, capacity_mask)) as _,
-                entries: (offset_of!(AsyncCallBufferLayout, req_entries)
-                    + size_of::<RequestRingEntry>() * self.req_capacity as usize)
-                    as _,
+                capacity: offset_of!(AsyncCallBufferLayout, comp_capacity) as _,
+                capacity_mask: offset_of!(AsyncCallBufferLayout, comp_capacity_mask) as _,
+                entries: comp_entries_off as _,
             },
         }
     }
 
     pub(super) fn read_req_ring_head(&self) -> u32 {
-        self.as_raw().req_ring.head
+        self.as_raw().req_ring.head.get()
     }
 
     pub(super) fn write_req_ring_head(&self, new_head: u32) {
-        unsafe { atomic_store_rel(&mut self.as_raw_mut().req_ring.head as _, new_head) }
+        unsafe { atomic_store_rel(self.as_raw_mut().req_ring.head.as_mut() as _, new_head) }
     }
 
     pub(super) fn read_req_ring_tail(&self) -> u32 {
-        unsafe { atomic_load_acq(&self.as_raw().req_ring.tail as _) }
+        unsafe { atomic_load_acq(self.as_raw().req_ring.tail.as_ref() as _) }
     }
 
     pub(super) fn request_count(&self, cached_req_ring_head: u32) -> AcoreResult<u32> {
@@ -194,15 +198,15 @@ impl AsyncCallBuffer {
     }
 
     pub(super) fn read_comp_ring_head(&self) -> u32 {
-        unsafe { atomic_load_acq(&self.as_raw().comp_ring.head as _) }
+        unsafe { atomic_load_acq(self.as_raw().comp_ring.head.as_ref() as _) }
     }
 
     pub(super) fn read_comp_ring_tail(&self) -> u32 {
-        self.as_raw().comp_ring.tail
+        self.as_raw().comp_ring.tail.get()
     }
 
     pub(super) fn write_comp_ring_tail(&self, new_tail: u32) {
-        unsafe { atomic_store_rel(&mut self.as_raw_mut().comp_ring.tail as _, new_tail) }
+        unsafe { atomic_store_rel(self.as_raw_mut().comp_ring.tail.as_mut() as _, new_tail) }
     }
 
     pub(super) fn completion_count(&self, cached_comp_ring_tail: u32) -> AcoreResult<u32> {

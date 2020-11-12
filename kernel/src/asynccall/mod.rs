@@ -3,6 +3,11 @@ mod structs;
 
 use alloc::{boxed::Box, sync::Arc};
 use core::convert::TryFrom;
+use core::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use spin::Mutex;
 
@@ -65,9 +70,7 @@ impl AsyncCall {
         *thread.owned_res.async_buf.lock() = Some(buf);
 
         // spawn async call polling coroutine and notify the I/O CPU
-        let ac = Self::new(thread.clone());
-        ASYNC_CALL_EXECUTOR.spawn(Box::pin(async move { ac.polling().await }));
-        cpu::send_ipi(crate::config::IO_CPU_ID);
+        spawn_polling(thread);
 
         Ok(info)
     }
@@ -122,6 +125,7 @@ impl AsyncCall {
         let mut cached_req_head = buf.read_req_ring_head();
         let mut cached_comp_tail = buf.read_comp_ring_tail();
         let req_count = buf.request_count(cached_req_head)?;
+        // TODO: limit requests count or time for one thread
         for _ in 0..req_count {
             if self.thread.is_exited() {
                 break;
@@ -149,9 +153,43 @@ impl AsyncCall {
                 self.thread.exit(e as usize);
                 break;
             }
+            yield_now().await;
         }
         info!("async call polling for thread {} is done.", self.thread.id);
     }
+}
+
+type AsyncCallFuture = dyn Future<Output = ()> + Send;
+type AsyncCallFuturePinned = Pin<Box<AsyncCallFuture>>;
+
+struct AsyncCallSwitchFuture {
+    thread: Arc<Thread>,
+    future: AsyncCallFuturePinned,
+}
+
+impl AsyncCallSwitchFuture {
+    fn new(thread: Arc<Thread>, future: AsyncCallFuturePinned) -> Self {
+        Self { thread, future }
+    }
+}
+
+impl Future for AsyncCallSwitchFuture {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        unsafe {
+            crate::arch::context::write_tls(self.thread.tls_ptr());
+        }
+        self.get_mut().future.as_mut().poll(cx)
+    }
+}
+
+fn spawn_polling(thread: &Arc<Thread>) {
+    let ac = AsyncCall::new(thread.clone());
+    ASYNC_CALL_EXECUTOR.spawn(AsyncCallSwitchFuture::new(
+        thread.clone(),
+        Box::pin(async move { ac.polling().await }),
+    ));
+    cpu::send_ipi(crate::config::IO_CPU_ID);
 }
 
 pub fn init() {

@@ -108,7 +108,7 @@ impl Thread {
 }
 
 impl Thread {
-    fn tls_ptr(self: &Arc<Self>) -> usize {
+    pub fn tls_ptr(self: &Arc<Self>) -> usize {
         Arc::as_ptr(self) as usize
     }
 
@@ -129,6 +129,7 @@ impl Thread {
             }
             if state.need_sched {
                 state.need_sched = false;
+                drop(state);
                 yield_now().await;
             }
         }

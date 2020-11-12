@@ -27,6 +27,7 @@ int main(int argc, char* argv[])
         async_call_write(req, stdout, str, strlen(str), 0);
         smp_store_release(buffer.req_ring.ktail, cached_tail + 1);
     }
+    sched_yield();
 
     while (smp_load_acquire(buffer.comp_ring.ktail) < 10) {
         while (*buffer.comp_ring.khead < smp_load_acquire(buffer.comp_ring.ktail)) {

@@ -15,6 +15,16 @@ pub unsafe fn current<'a>() -> &'a Thread {
     &*ptr
 }
 
+pub unsafe fn current_option<'a>() -> Option<&'a Thread> {
+    let tls = crate::arch::context::read_tls();
+    if tls < crate::config::CPU_NUM {
+        None
+    } else {
+        let ptr = tls as *const Thread;
+        Some(&*ptr)
+    }
+}
+
 pub fn spawn(thread: Arc<Thread>) {
     info!(
         "spawn {} thread {}.",

@@ -24,9 +24,9 @@ pub trait PmArea: core::fmt::Debug + Send + Sync {
     /// Release the given 4KB physical frame, perform deallocation if the frame has been allocated.
     fn release_frame(&mut self, idx: usize) -> AcoreResult;
     /// Read data from this PMA at `offset`.
-    fn read(&mut self, offset: usize, data: &mut [u8]) -> AcoreResult<usize>;
+    fn read(&mut self, offset: usize, dst: &mut [u8]) -> AcoreResult<usize>;
     /// Write data to this PMA at `offset`.
-    fn write(&mut self, offset: usize, data: &[u8]) -> AcoreResult<usize>;
+    fn write(&mut self, offset: usize, src: &[u8]) -> AcoreResult<usize>;
 }
 
 /// A contiguous virtual memory area with same MMU flags.
@@ -35,8 +35,8 @@ pub trait PmArea: core::fmt::Debug + Send + Sync {
 pub struct VmArea {
     pub(super) start: VirtAddr,
     pub(super) end: VirtAddr,
-    flags: MMUFlags,
-    pma: Arc<Mutex<dyn PmArea>>,
+    pub(super) flags: MMUFlags,
+    pub(super) pma: Arc<Mutex<dyn PmArea>>,
     name: &'static str,
 }
 

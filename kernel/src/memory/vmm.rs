@@ -142,6 +142,66 @@ impl<PT: PageTable> MemorySet<PT> {
     pub unsafe fn activate(&self) {
         self.pt.set_current()
     }
+
+    fn read_write(
+        &self,
+        start: VirtAddr,
+        len: usize,
+        access_flags: MMUFlags,
+        mut op: impl FnMut(&VmArea, usize, usize, usize) -> AcoreResult,
+    ) -> AcoreResult {
+        let mut start = start;
+        let mut len = len;
+        let mut processed = 0;
+        while len > 0 {
+            if let Some((_, area)) = self.areas.range(..=start).last() {
+                if area.end <= start {
+                    return Err(AcoreError::Fault);
+                }
+                if !area.flags.contains(access_flags) {
+                    return Err(AcoreError::AccessDenied);
+                }
+                let n = (area.end - start).min(len);
+                op(area, start - area.start, n, processed)?;
+                start += n;
+                processed += n;
+                len -= n;
+            } else {
+                return Err(AcoreError::Fault);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn read(
+        &self,
+        start: VirtAddr,
+        len: usize,
+        dst: &mut [u8],
+        access_flags: MMUFlags,
+    ) -> AcoreResult {
+        self.read_write(start, len, access_flags, |area, offset, len, processed| {
+            area.pma
+                .lock()
+                .read(offset, &mut dst[processed..processed + len])?;
+            Ok(())
+        })
+    }
+
+    pub fn write(
+        &self,
+        start: VirtAddr,
+        len: usize,
+        src: &[u8],
+        access_flags: MMUFlags,
+    ) -> AcoreResult {
+        self.read_write(start, len, access_flags, |area, offset, len, processed| {
+            area.pma
+                .lock()
+                .write(offset, &src[processed..processed + len])?;
+            Ok(())
+        })
+    }
 }
 
 impl<PT: PageTable> Drop for MemorySet<PT> {

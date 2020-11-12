@@ -29,7 +29,7 @@ impl PmArea for PmAreaFixed {
     fn release_frame(&mut self, _idx: usize) -> AcoreResult {
         Ok(())
     }
-    fn read(&mut self, offset: usize, buf: &mut [u8]) -> AcoreResult<usize> {
+    fn read(&mut self, offset: usize, dst: &mut [u8]) -> AcoreResult<usize> {
         if offset >= self.size() {
             warn!(
                 "out of range in PmAreaFixed::read(): offset={:#x?}, {:#x?}",
@@ -37,12 +37,12 @@ impl PmArea for PmAreaFixed {
             );
             return Err(AcoreError::OutOfRange);
         }
-        let len = buf.len().min(self.end - offset);
+        let len = dst.len().min(self.end - offset);
         let data = unsafe { slice::from_raw_parts((self.start + offset) as *const u8, len) };
-        buf.copy_from_slice(data);
+        dst.copy_from_slice(data);
         Ok(len)
     }
-    fn write(&mut self, offset: usize, buf: &[u8]) -> AcoreResult<usize> {
+    fn write(&mut self, offset: usize, src: &[u8]) -> AcoreResult<usize> {
         if offset >= self.size() {
             warn!(
                 "out of range in PmAreaFixed::write(): offset={:#x?}, {:#x?}",
@@ -50,9 +50,9 @@ impl PmArea for PmAreaFixed {
             );
             return Err(AcoreError::OutOfRange);
         }
-        let len = buf.len().min(self.end - offset);
+        let len = src.len().min(self.end - offset);
         let data = unsafe { slice::from_raw_parts_mut((self.start + offset) as *mut u8, len) };
-        data.copy_from_slice(buf);
+        data.copy_from_slice(src);
         Ok(len)
     }
 }

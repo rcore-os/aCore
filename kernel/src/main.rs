@@ -61,7 +61,6 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
 
     // update the TLS register on all CPUs
     let per_cpu_ptr = task::PerCpu::from_cpu_id(cpu_id) as *const _ as usize;
-    error!("{:x?}", per_cpu_ptr);
     debug_assert!(per_cpu_ptr % task::MAX_CPU_NUM == 0);
     unsafe { arch::cpu::write_tls(per_cpu_ptr + cpu_id) };
 

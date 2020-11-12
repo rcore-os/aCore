@@ -6,8 +6,8 @@ use spin::Mutex;
 use super::{PmArea, VmArea};
 use crate::error::{AcoreError, AcoreResult};
 use crate::memory::{
-    addr::{align_down, align_up},
-    Frame, MMUFlags, PhysAddr, VirtAddr, PAGE_SIZE,
+    addr::{self, align_down},
+    Frame, MMUFlags, PhysAddr, VirtAddr, PAGE_SIZE, USER_VIRT_ADDR_LIMIT,
 };
 
 /// A discontiguous PMA which perform lazy allocation (e.g. in page fault handler).
@@ -31,23 +31,15 @@ impl PmArea for PmAreaLazy {
         self.frames[idx].take().ok_or(AcoreError::NotFound)?;
         Ok(())
     }
-    fn read(&mut self, offset: usize, buf: &mut [u8]) -> AcoreResult<usize> {
-        let mut total_len = 0;
-        self.for_each_frame(offset, buf.len(), |frame: &mut [u8]| {
-            let len = frame.len();
-            buf[total_len..total_len + len].copy_from_slice(frame);
-            total_len += len;
-        })?;
-        Ok(total_len)
+    fn read(&mut self, offset: usize, dst: &mut [u8]) -> AcoreResult<usize> {
+        self.for_each_frame(offset, dst.len(), |processed: usize, frame: &mut [u8]| {
+            dst[processed..processed + frame.len()].copy_from_slice(frame);
+        })
     }
-    fn write(&mut self, offset: usize, buf: &[u8]) -> AcoreResult<usize> {
-        let mut total_len = 0;
-        self.for_each_frame(offset, buf.len(), |frame: &mut [u8]| {
-            let len = frame.len();
-            frame.copy_from_slice(&buf[total_len..total_len + len]);
-            total_len += len;
-        })?;
-        Ok(total_len)
+    fn write(&mut self, offset: usize, src: &[u8]) -> AcoreResult<usize> {
+        self.for_each_frame(offset, src.len(), |processed: usize, frame: &mut [u8]| {
+            frame.copy_from_slice(&src[processed..processed + frame.len()]);
+        })
     }
 }
 
@@ -60,6 +52,13 @@ impl PmAreaLazy {
             );
             return Err(AcoreError::InvalidArgs);
         }
+        if page_count > addr::page_count(USER_VIRT_ADDR_LIMIT) {
+            warn!(
+                "page_count is too large in PmAreaLazy::new(): {:#x?}",
+                page_count
+            );
+            return Err(AcoreError::NoMemory);
+        }
         let mut frames = Vec::with_capacity(page_count);
         for _ in 0..page_count {
             frames.push(None);
@@ -71,38 +70,36 @@ impl PmAreaLazy {
         &mut self,
         offset: usize,
         len: usize,
-        mut op: impl FnMut(&mut [u8]),
-    ) -> AcoreResult {
-        if offset >= self.size() {
+        mut op: impl FnMut(usize, &mut [u8]),
+    ) -> AcoreResult<usize> {
+        if offset >= self.size() || offset + len > self.size() {
             warn!(
-                "out of range in PmAreaLazy::for_each_frame(): offset={:#x?}, {:#x?}",
-                offset, self
+                "out of range in PmAreaLazy::for_each_frame(): offset={:#x?}, len={:#x?}, {:#x?}",
+                offset, len, self
             );
             return Err(AcoreError::OutOfRange);
         }
-        let len = len.min(self.size() - offset);
-        let start_offset = offset - align_down(offset);
-        let end_offset = align_up(offset + len) - (offset + len);
-        let start_idx = offset / PAGE_SIZE;
-        let end_idx = align_up(offset + len) / PAGE_SIZE;
-        for i in start_idx..end_idx {
-            let (mut range_start, mut range_end) = (0, PAGE_SIZE);
-            if i == start_idx {
-                range_start += start_offset;
-            }
-            if i == end_idx - 1 {
-                range_end -= end_offset;
-            }
+        let mut start = offset;
+        let mut len = len;
+        let mut processed = 0;
+        while len > 0 {
+            let start_align = align_down(start);
+            let pgoff = start - start_align;
+            let n = (PAGE_SIZE - pgoff).min(len);
 
-            if self.frames[i].is_none() {
+            let idx = start_align / PAGE_SIZE;
+            if self.frames[idx].is_none() {
                 let mut frame = Frame::new()?;
                 frame.zero();
-                self.frames[i] = Some(frame);
+                self.frames[idx] = Some(frame);
             }
-            let frame = self.frames[i].as_mut().unwrap();
-            op(&mut frame.as_slice_mut()[range_start..range_end]);
+            let frame = self.frames[idx].as_mut().unwrap();
+            op(processed, &mut frame.as_slice_mut()[pgoff..pgoff + n]);
+            start += n;
+            processed += n;
+            len -= n;
         }
-        Ok(())
+        Ok(processed)
     }
 }
 

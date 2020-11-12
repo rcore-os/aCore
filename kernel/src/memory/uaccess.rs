@@ -1,24 +1,48 @@
 use alloc::vec::Vec;
 use core::fmt::{Debug, Formatter, Result};
 use core::marker::PhantomData;
+use core::mem::size_of;
+use core::slice;
 
-use super::{VirtAddr, USER_VIRT_ADDR_LIMIT};
-use crate::arch::memory::with_user_access;
+use super::{MMUFlags, VirtAddr, USER_VIRT_ADDR_LIMIT};
+use crate::arch::{cpu, memory::with_user_access};
+use crate::config;
 use crate::error::{AcoreError, AcoreResult};
+use crate::task::PerCpu;
 
 fn user_access_ok(uvaddr_start: VirtAddr, size: usize) -> bool {
     size <= USER_VIRT_ADDR_LIMIT && uvaddr_start <= USER_VIRT_ADDR_LIMIT - size
 }
 
 unsafe fn copy_from_user<T>(kdst: *mut T, usrc: *const T, len: usize) -> AcoreResult {
-    // TODO: handle kernel page fault
-    with_user_access(|| kdst.copy_from_nonoverlapping(usrc, len));
+    // TODO: handle kernel page fault on normal CPU
+    let bytes = len * size_of::<T>();
+    match cpu::id() {
+        config::NORMAL_CPU_ID => with_user_access(|| kdst.copy_from_nonoverlapping(usrc, len)),
+        config::IO_CPU_ID => PerCpu::from_tls().thread_unwrap().vm.lock().read(
+            usrc as usize,
+            bytes,
+            slice::from_raw_parts_mut(kdst as *mut u8, bytes),
+            MMUFlags::USER | MMUFlags::READ,
+        )?,
+        _ => unreachable!(),
+    };
     Ok(())
 }
 
 unsafe fn copy_to_user<T>(udst: *mut T, ksrc: *const T, len: usize) -> AcoreResult {
-    // TODO: handle kernel page fault
-    with_user_access(|| udst.copy_from_nonoverlapping(ksrc, len));
+    // TODO: handle kernel page fault on normal CPU
+    let bytes = len * size_of::<T>();
+    match cpu::id() {
+        config::NORMAL_CPU_ID => with_user_access(|| udst.copy_from_nonoverlapping(ksrc, len)),
+        config::IO_CPU_ID => PerCpu::from_tls().thread_unwrap().vm.lock().write(
+            udst as usize,
+            bytes,
+            slice::from_raw_parts(ksrc as *const u8, bytes),
+            MMUFlags::USER | MMUFlags::WRITE,
+        )?,
+        _ => unreachable!(),
+    };
     Ok(())
 }
 
@@ -88,7 +112,7 @@ impl<T, P: Policy> UserPtr<T, P> {
         if (self.ptr as usize) % core::mem::align_of::<T>() != 0 {
             return Err(AcoreError::InvalidArgs);
         }
-        if !user_access_ok(self.ptr as usize, core::mem::size_of::<T>() * count) {
+        if !user_access_ok(self.ptr as usize, size_of::<T>() * count) {
             return Err(AcoreError::Fault);
         }
         Ok(())

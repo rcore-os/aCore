@@ -39,8 +39,9 @@ use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 #[no_mangle]
 pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
     static AP_CAN_INIT: AtomicBool = AtomicBool::new(false);
-    let cpu_id = arch::cpu::boot_cpu_id();
+    let cpu_id = arch::cpu::id();
     if cpu_id == config::BOOTSTRAP_CPU_ID {
+        // init bootstrap CPU
         memory::clear_bss();
         arch::primary_init_early(arg0, arg1);
         logging::init();
@@ -49,6 +50,7 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
         arch::primary_init(arg0, arg1);
         AP_CAN_INIT.store(true, Ordering::Release);
     } else {
+        // init other CPUs
         while !AP_CAN_INIT.load(Ordering::Acquire) {
             spin_loop_hint();
         }
@@ -56,6 +58,13 @@ pub extern "C" fn start_kernel(arg0: usize, arg1: usize) -> ! {
         unsafe { trapframe::init() };
         arch::secondary_init(arg0, arg1);
     }
+
+    // update the TLS register on all CPUs
+    let per_cpu_ptr = task::PerCpu::from_cpu_id(cpu_id) as *const _ as usize;
+    error!("{:x?}", per_cpu_ptr);
+    debug_assert!(per_cpu_ptr % task::MAX_CPU_NUM == 0);
+    unsafe { arch::cpu::write_tls(per_cpu_ptr + cpu_id) };
+
     println!("Hello, CPU {}!", cpu_id);
     match cpu_id {
         config::NORMAL_CPU_ID => normal_main(),

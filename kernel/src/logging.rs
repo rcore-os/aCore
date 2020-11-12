@@ -55,7 +55,7 @@ impl Log for SimpleLogger {
             return;
         }
 
-        if let Some(thread) = unsafe { crate::task::current_option() } {
+        if let Some(thread) = crate::task::PerCpu::from_current_cpu_id().thread() {
             print_in_color(
                 format_args!(
                     "[{:>5}][{},{}] {}\n",

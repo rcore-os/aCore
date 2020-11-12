@@ -1,14 +1,15 @@
-pub fn boot_cpu_id() -> usize {
-    super::context::read_tls()
+pub fn id() -> usize {
+    crate::task::PerCpu::id()
 }
 
-pub fn id() -> usize {
-    let boot_id = boot_cpu_id();
-    if boot_id < crate::config::CPU_NUM {
-        boot_id
-    } else {
-        unsafe { crate::task::current().cpu }
-    }
+pub fn read_tls() -> usize {
+    let tls: usize;
+    unsafe { asm!("mv {0}, tp", out(reg) tls) };
+    tls
+}
+
+pub unsafe fn write_tls(tls: usize) {
+    asm!("mv tp, {0}", in(reg) tls);
 }
 
 pub fn wait_for_interrupt() {

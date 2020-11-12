@@ -46,7 +46,7 @@ pub fn handle_kernel_page_fault(vaddr: VirtAddr, access_flags: MMUFlags) -> Acor
         "kernel page fault @ {:#x} with access {:?}",
         vaddr, access_flags
     );
-    let th = unsafe { crate::task::current() };
+    let th = unsafe { crate::task::PerCpu::from_tls().thread_unwrap() };
     th.vm.lock().handle_page_fault(vaddr, access_flags)
 }
 

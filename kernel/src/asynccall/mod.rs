@@ -12,21 +12,18 @@ use core::{
 use spin::Mutex;
 
 use crate::arch::cpu;
+use crate::config::IO_CPU_ID;
 use crate::error::{AcoreError, AcoreResult};
 use crate::memory::{
     addr::{is_aligned, virt_to_phys},
     areas::{PmAreaFixed, VmArea},
     MMUFlags, PAGE_SIZE,
 };
-use crate::sched::{yield_now, Executor};
-use crate::task::Thread;
+use crate::sched::yield_now;
+use crate::task::{PerCpu, Thread};
 use structs::{AsyncCallType, CompletionRingEntry, RequestRingEntry};
 
 pub use structs::{AsyncCallBuffer, AsyncCallInfoUser};
-
-lazy_static! {
-    static ref ASYNC_CALL_EXECUTOR: Executor = Executor::default();
-}
 
 pub struct AsyncCall {
     thread: Arc<Thread>,
@@ -176,20 +173,18 @@ impl AsyncCallSwitchFuture {
 impl Future for AsyncCallSwitchFuture {
     type Output = ();
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        unsafe {
-            crate::arch::context::write_tls(self.thread.tls_ptr());
-        }
+        PerCpu::set_current_thread(&self.thread);
         self.get_mut().future.as_mut().poll(cx)
     }
 }
 
 fn spawn_polling(thread: &Arc<Thread>) {
     let ac = AsyncCall::new(thread.clone());
-    ASYNC_CALL_EXECUTOR.spawn(AsyncCallSwitchFuture::new(
+    PerCpu::from_cpu_id(IO_CPU_ID).spawn(AsyncCallSwitchFuture::new(
         thread.clone(),
         Box::pin(async move { ac.polling().await }),
     ));
-    cpu::send_ipi(crate::config::IO_CPU_ID);
+    cpu::send_ipi(IO_CPU_ID);
 }
 
 pub fn init() {
@@ -198,7 +193,7 @@ pub fn init() {
 
 pub fn run_forever() -> ! {
     loop {
-        ASYNC_CALL_EXECUTOR.run_until_idle();
+        PerCpu::from_cpu_id(IO_CPU_ID).run_until_idle();
         info!("no async coroutines to run, waiting for interrupt...");
         cpu::wait_for_interrupt();
     }

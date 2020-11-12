@@ -4,7 +4,7 @@ use core::{
     task::{Context, Poll},
 };
 
-pub use executor::{self, Executor};
+pub use executor::Executor;
 
 #[derive(Default)]
 struct YieldFuture {

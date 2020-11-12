@@ -30,7 +30,6 @@ struct ThreadState {
 
 pub struct Thread<C: ThreadContext = ArchThreadContext> {
     pub id: usize,
-    pub cpu: usize,
     pub is_user: bool,
     pub vm: Arc<Mutex<MemorySet>>,
     pub owned_res: OwnedResource,
@@ -53,7 +52,6 @@ impl Thread {
     fn new(is_user: bool, vm: Arc<Mutex<MemorySet>>) -> AcoreResult<Arc<Self>> {
         let th = Arc::new(Self {
             id: TID_ALLOCATOR.lock().alloc()?,
-            cpu: crate::arch::cpu::id(),
             is_user,
             vm,
             owned_res: OwnedResource::default(),
@@ -108,10 +106,6 @@ impl Thread {
 }
 
 impl Thread {
-    pub fn tls_ptr(self: &Arc<Self>) -> usize {
-        Arc::as_ptr(self) as usize
-    }
-
     async fn run_user(self: &Arc<Self>) -> AcoreResult {
         if !self.is_user {
             return Err(AcoreError::BadState);
@@ -148,7 +142,7 @@ impl<C: ThreadContext> Drop for Thread<C> {
 impl<C: ThreadContext> Debug for Thread<C> {
     fn fmt(&self, f: &mut Formatter) -> Result {
         let mut f = f.debug_struct("Thread");
-        f.field("id", &self.id).field("cpu", &self.cpu);
+        f.field("id", &self.id);
         if self.is_user {
             f.field("vm", &self.vm);
         } else {
@@ -179,10 +173,8 @@ impl ThreadSwitchFuture {
 impl Future for ThreadSwitchFuture {
     type Output = ();
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        unsafe {
-            crate::arch::context::write_tls(self.0.tls_ptr());
-            self.0.vm.lock().activate();
-        }
+        super::PerCpu::set_current_thread(&self.0);
+        unsafe { self.0.vm.lock().activate() };
         self.0.future.lock().as_mut().poll(cx).map(|res| {
             let exit_code = match res {
                 Ok(_) => 0,

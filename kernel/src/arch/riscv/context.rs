@@ -67,13 +67,3 @@ impl ThreadContext for ArchThreadContext {
         }
     }
 }
-
-pub fn read_tls() -> usize {
-    let ptr: usize;
-    unsafe { asm!("mv {0}, tp", out(reg) ptr) };
-    ptr
-}
-
-pub unsafe fn write_tls(ptr: usize) {
-    asm!("mv tp, {0}", in(reg) ptr);
-}

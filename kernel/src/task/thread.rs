@@ -41,7 +41,7 @@ pub struct Thread<C: ThreadContext = ArchThreadContext> {
 
 lazy_static! {
     #[repr(align(64))]
-    static ref TID_ALLOCATOR: Mutex<IdAllocator> = Mutex::new(IdAllocator::new(1..65536));
+    static ref TID_ALLOCATOR: Mutex<IdAllocator> = Mutex::new(IdAllocator::new(1..65536).unwrap());
     #[repr(align(64))]
     static ref THREAD_POOL: Mutex<BTreeMap<usize, Arc<Thread>>> = Mutex::new(BTreeMap::new());
     #[repr(align(64))]
@@ -55,7 +55,7 @@ impl Thread {
             is_user,
             vm,
             owned_res: OwnedResource::default(),
-            shared_res: Arc::new(SharedResource::default()),
+            shared_res: Arc::new(SharedResource::new()?),
             context: Mutex::new(None),
             state: Mutex::new(ThreadState::default()),
             future: Mutex::new(Box::pin(async { Ok(()) })),
@@ -157,7 +157,9 @@ impl<C: ThreadContext> Debug for Thread<C> {
                 } else {
                     format_args!("KERNEL")
                 },
-            );
+            )
+            .field("owned_res", &self.owned_res)
+            .field("shared_res", &self.shared_res);
         f.finish()
     }
 }

@@ -11,6 +11,7 @@ use crate::fs::RAM_DISK;
 use crate::sched::Executor;
 
 pub use context::{ThreadContext, TrapReason};
+pub use resource::res_limit;
 pub use thread::Thread;
 
 pub const MAX_CPU_NUM: usize = 256;

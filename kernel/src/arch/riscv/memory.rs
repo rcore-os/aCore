@@ -27,6 +27,7 @@ pub mod consts {
     pub const DEVICE_END: usize = 0x9800_0000;
 }
 
+// support max 1G RAM
 pub type FrameAlloc = bitmap_allocator::BitAlloc1M;
 
 pub fn get_phys_memory_regions() -> Vec<Range<usize>> {

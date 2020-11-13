@@ -14,6 +14,7 @@ pub enum AcoreError {
     AlreadyExists = -9,
     AccessDenied = -10,
     Fault = -11,
+    BadFileDescriptor = -12,
 }
 
 pub type AcoreResult<T = ()> = Result<T, AcoreError>;

@@ -85,6 +85,7 @@ impl AsyncCall {
         };
         debug!("AsyncCall: {:?} => {:x?}", ac_type, req);
         let fd = req.fd as usize;
+        let flags = req.flags as usize;
         let offset = req.offset as usize;
         let user_buf_addr = req.user_buf_addr as usize;
         let buf_size = req.buf_size as usize;
@@ -98,6 +99,8 @@ impl AsyncCall {
                 self.async_write(fd, user_buf_addr.into(), buf_size, offset)
                     .await
             }
+            AsyncCallType::Open => self.async_open(user_buf_addr.into(), flags).await,
+            AsyncCallType::Close => self.async_close(fd).await,
             _ => {
                 warn!("asynca call unimplemented: {:?}", ac_type);
                 Err(AcoreError::NotSupported)

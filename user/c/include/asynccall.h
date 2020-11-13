@@ -11,13 +11,13 @@ enum {
 
 struct req_ring_entry {
     uint8_t opcode;
-    uint8_t flags;
-    uint16_t _pad0;
+    uint8_t _pad0;
+    uint16_t _pad1;
     int32_t fd;
     uint64_t offset;
     uint64_t user_buf_addr;
     uint32_t buf_size;
-    uint32_t _pad1;
+    uint32_t flags;
     uint64_t user_data;
 };
 

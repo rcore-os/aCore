@@ -1,83 +1,93 @@
+mod file;
 mod stdio;
 
-use alloc::boxed::Box;
+use alloc::{sync::Arc, vec::Vec};
+use core::fmt::{Debug, Formatter, Result};
 
-use spin::Mutex;
+use crate::error::{AcoreError, AcoreResult};
+use crate::utils::IdAllocator;
+use stdio::{Stdin, Stdout};
 
-use crate::error::AcoreResult;
-use crate::memory::addr::{phys_to_virt, PhysAddr};
-use crate::memory::{DEVICE_END, DEVICE_START};
+pub use file::{File, RAM_DISK};
 
-pub struct Disk {
-    data: &'static mut [u8],
-    size: usize,
+pub trait GenericFile: Send + Sync + Debug {
+    fn open(&self) -> AcoreResult {
+        Ok(())
+    }
+    fn release(&self) -> AcoreResult {
+        Ok(())
+    }
+    fn read(&self, _offset: usize, _buf: &mut [u8]) -> AcoreResult<usize> {
+        Err(AcoreError::NotSupported)
+    }
+    fn write(&self, _offset: usize, _buf: &[u8]) -> AcoreResult<usize> {
+        Err(AcoreError::NotSupported)
+    }
 }
 
-pub struct File {
-    offset_in_disk: usize,
-    size: usize,
+pub struct FileStruct {
+    files: Vec<Option<Arc<dyn GenericFile>>>,
+    fd_allocator: IdAllocator,
 }
 
-pub trait GenericFile {
-    fn read(&self, offset: usize, buf: &mut [u8]) -> AcoreResult<usize>;
-    fn write(&self, offset: usize, buf: &[u8]) -> AcoreResult<usize>;
+impl FileStruct {
+    pub fn new(max_file_num: usize) -> AcoreResult<Self> {
+        let mut files = Self {
+            files: vec![None; max_file_num],
+            fd_allocator: IdAllocator::new(0..max_file_num)?,
+        };
+        files.add_file(Arc::new(Stdin))?;
+        files.add_file(Arc::new(Stdout))?;
+        files.add_file(Arc::new(Stdout))?;
+        Ok(files)
+    }
+
+    pub fn add_file(&mut self, file: Arc<dyn GenericFile>) -> AcoreResult<usize> {
+        let fd = self.fd_allocator.alloc()?;
+        debug_assert!(self.files[fd].is_none());
+        self.files[fd] = Some(file);
+        Ok(fd)
+    }
+
+    pub fn get_file(&self, fd: usize) -> AcoreResult<Arc<dyn GenericFile>> {
+        if fd >= self.files.len() {
+            return Err(AcoreError::BadFileDescriptor);
+        }
+        match &self.files[fd] {
+            Some(f) => Ok(f.clone()),
+            None => Err(AcoreError::BadFileDescriptor),
+        }
+    }
+
+    pub fn remove_file(&mut self, fd: usize) -> AcoreResult {
+        if fd >= self.files.len() || self.files[fd].is_none() {
+            return Err(AcoreError::BadFileDescriptor);
+        }
+        self.files[fd] = None;
+        self.fd_allocator.dealloc(fd);
+        Ok(())
+    }
 }
 
-lazy_static! {
-    pub static ref RAM_DISK: Mutex<Disk> =
-        Mutex::new(Disk::new(DEVICE_START, DEVICE_END - DEVICE_START));
-}
-
-impl Disk {
-    fn new(start_paddr: PhysAddr, size: usize) -> Self {
-        unsafe {
-            Self {
-                data: core::slice::from_raw_parts_mut(phys_to_virt(start_paddr) as *mut u8, size),
-                size,
+impl Drop for FileStruct {
+    fn drop(&mut self) {
+        for file in &self.files {
+            if let Some(f) = file {
+                f.release().ok();
             }
         }
     }
-
-    pub fn lookup(&mut self, _filename: &str) -> File {
-        File::new(0, self.size)
-    }
 }
 
-impl File {
-    fn new(offset_in_disk: usize, size: usize) -> Self {
-        Self {
-            offset_in_disk,
-            size,
-        }
-    }
-
-    pub fn as_slice_mut(&self) -> &'static mut [u8] {
-        let ptr = RAM_DISK.lock().data.as_mut_ptr();
-        unsafe { core::slice::from_raw_parts_mut(ptr.add(self.offset_in_disk), self.size) }
-    }
-}
-
-impl GenericFile for File {
-    fn read(&self, offset: usize, buf: &mut [u8]) -> AcoreResult<usize> {
-        let len = buf.len();
-        let offset = offset + self.offset_in_disk;
-        buf.copy_from_slice(&RAM_DISK.lock().data[offset..offset + len]);
-        Ok(len)
-    }
-
-    fn write(&self, offset: usize, buf: &[u8]) -> AcoreResult<usize> {
-        let len = buf.len();
-        let offset = offset + self.offset_in_disk;
-        RAM_DISK.lock().data[offset..offset + len].copy_from_slice(buf);
-        Ok(len)
-    }
-}
-
-pub fn get_file_by_fd(fd: usize) -> Box<dyn GenericFile> {
-    match fd {
-        0 => Box::new(stdio::Stdin),
-        1 => Box::new(stdio::Stdout),
-        2 => Box::new(stdio::Stdout),
-        _ => Box::new(RAM_DISK.lock().lookup("")),
+impl Debug for FileStruct {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.debug_map()
+            .entries(
+                self.files
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, f)| f.as_ref().map(|f| (i, f))),
+            )
+            .finish()
     }
 }

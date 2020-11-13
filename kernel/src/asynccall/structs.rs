@@ -7,8 +7,7 @@ use super::AsyncCallResult;
 use crate::error::{AcoreError, AcoreResult};
 use crate::memory::cache::{alignup_cache_line, is_cache_line_aligned, AlignCacheLine};
 use crate::memory::{addr::page_count, Frame, VirtAddr};
-
-const MAX_ENTRY_COUNT: usize = 32768;
+use crate::task::res_limit::MAX_ASYNC_CALL_ENTRY_NUM;
 
 numeric_enum! {
 #[repr(u8)]
@@ -17,7 +16,9 @@ pub(super) enum AsyncCallType {
     Nop = 0,
     Read = 1,
     Write = 2,
-    Unknown = 3,
+    Open = 3,
+    Close = 4,
+    Unknown = 0xff,
 }
 }
 
@@ -25,13 +26,13 @@ pub(super) enum AsyncCallType {
 #[derive(Debug)]
 pub(super) struct RequestRingEntry {
     pub opcode: u8,
-    pub flags: u8,
-    _pad0: u16,
+    _pad0: u8,
+    _pad1: u16,
     pub fd: i32,
     pub offset: u64,
     pub user_buf_addr: u64,
     pub buf_size: u32,
-    _pad1: u32,
+    pub flags: u32,
     pub user_data: u64,
 }
 
@@ -109,10 +110,10 @@ impl CompletionRingEntry {
 
 impl AsyncCallBuffer {
     pub fn new(req_capacity: usize, comp_capacity: usize) -> AcoreResult<Self> {
-        if req_capacity == 0 || req_capacity > MAX_ENTRY_COUNT {
+        if req_capacity == 0 || req_capacity > MAX_ASYNC_CALL_ENTRY_NUM {
             return Err(AcoreError::InvalidArgs);
         }
-        if comp_capacity == 0 || comp_capacity > MAX_ENTRY_COUNT {
+        if comp_capacity == 0 || comp_capacity > MAX_ASYNC_CALL_ENTRY_NUM {
             return Err(AcoreError::InvalidArgs);
         }
         let req_capacity = req_capacity.next_power_of_two() as u32;

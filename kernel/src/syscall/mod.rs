@@ -4,7 +4,6 @@ use core::convert::TryFrom;
 use crate::arch::syscall_ids::SyscallType as Sys;
 use crate::asynccall::{AsyncCall, AsyncCallInfoUser};
 use crate::error::{AcoreError, AcoreResult};
-use crate::fs::get_file_by_fd;
 use crate::memory::uaccess::{UserInPtr, UserOutPtr};
 use crate::task::Thread;
 
@@ -57,7 +56,7 @@ impl<'a> Syscall<'a> {
 
 impl Syscall<'_> {
     fn sys_read(&self, fd: usize, mut base: UserOutPtr<u8>, count: usize) -> SysResult {
-        let file = get_file_by_fd(fd);
+        let file = self.thread.shared_res.files.lock().get_file(fd)?;
         let mut buf = vec![0u8; count];
         let count = file.read(0, &mut buf)?;
         base.write_array(&buf[..count])?;
@@ -65,7 +64,7 @@ impl Syscall<'_> {
     }
 
     fn sys_write(&self, fd: usize, base: UserInPtr<u8>, count: usize) -> SysResult {
-        let file = get_file_by_fd(fd);
+        let file = self.thread.shared_res.files.lock().get_file(fd)?;
         let buf = base.read_array(count)?;
         file.write(0, &buf)
     }

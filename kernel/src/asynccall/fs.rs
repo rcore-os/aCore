@@ -1,5 +1,5 @@
 use super::{AsyncCall, AsyncCallResult};
-use crate::fs::get_file_by_fd;
+use crate::error::AcoreError;
 use crate::memory::uaccess::{UserInPtr, UserOutPtr};
 
 impl AsyncCall {
@@ -10,7 +10,7 @@ impl AsyncCall {
         count: usize,
         _offset: usize,
     ) -> AsyncCallResult {
-        let file = get_file_by_fd(fd);
+        let file = self.thread.shared_res.files.lock().get_file(fd)?;
         let mut buf = vec![0u8; count];
         let count = file.read(0, &mut buf)?;
         base.write_array(&buf[..count])?;
@@ -24,8 +24,20 @@ impl AsyncCall {
         count: usize,
         _offset: usize,
     ) -> AsyncCallResult {
-        let file = get_file_by_fd(fd);
+        let file = self.thread.shared_res.files.lock().get_file(fd)?;
         let buf = base.read_array(count)?;
         file.write(0, &buf)
+    }
+
+    pub async fn async_open(&self, path: UserInPtr<u8>, flags: usize) -> AsyncCallResult {
+        println!("async_open {:x?} {:x?}", path, flags);
+        Err(AcoreError::NotSupported)
+    }
+
+    pub async fn async_close(&self, fd: usize) -> AsyncCallResult {
+        let file = self.thread.shared_res.files.lock().get_file(fd)?;
+        file.release()?;
+        self.thread.shared_res.files.lock().remove_file(fd)?;
+        Ok(0)
     }
 }

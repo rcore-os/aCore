@@ -1,7 +1,10 @@
 use super::GenericFile;
 use crate::error::{AcoreError, AcoreResult};
 
+#[derive(Debug)]
 pub struct Stdin;
+
+#[derive(Debug)]
 pub struct Stdout;
 
 impl GenericFile for Stdin {

@@ -101,10 +101,10 @@ int check_file(struct async_call_buffer* buffer, char* buf, int* check)
 char buf[INSIZE];
 int check[ID_MAX];
 
-int run_test(struct async_call_buffer* buffer) {
+int run_test(struct async_call_buffer* buffer, int seed) {
     int ret;
     memset(buf, 0, INSIZE);
-    srand(233);
+    srand(seed);
     init_buffer(buf, check);
     ret = write_file(buffer, buf);
     if(ret != 0)
@@ -115,7 +115,7 @@ int run_test(struct async_call_buffer* buffer) {
 
 int main(int argc, char* argv[])
 {
-    FD = open(argv[0], sizeof(argv[0]), 0);
+    FD = open(argv[0], strlen(argv[0]), 0);
     struct async_call_buffer buffer;
     int ret;
     ret = async_call_buffer_init(BUFFER_ENTRIES, BUFFER_ENTRIES << 1, &buffer);
@@ -123,7 +123,7 @@ int main(int argc, char* argv[])
         puts("setup error");
         return ret;
     }
-    ret = run_test(&buffer);
+    ret = run_test(&buffer, strlen(argv[0]));
     if (ret != 0) {
         puts("result error");
         return ret;

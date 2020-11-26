@@ -7,7 +7,6 @@ use super::GenericFile;
 use crate::error::AcoreResult;
 use crate::memory::addr::{phys_to_virt, PhysAddr};
 use crate::memory::{DEVICE_END, DEVICE_START};
-use crate::utils::IdAllocator;
 
 pub const ELF_SIZE: usize = (DEVICE_END - DEVICE_START) >> 1;
 pub const MEMORY_FILE_START: usize = DEVICE_START + ELF_SIZE;
@@ -16,7 +15,7 @@ pub const MEMORY_FILE_SIZE: usize = 0x100_0000;
 
 pub struct Disk {
     data: &'static mut [u8],
-    size: usize,
+    _size: usize,
 }
 
 pub struct File {
@@ -28,9 +27,6 @@ pub struct File {
 lazy_static! {
     pub static ref RAM_DISK: Mutex<Disk> =
         Mutex::new(Disk::new(DEVICE_START, DEVICE_END - DEVICE_START));
-    pub static ref MFD_ALLOCATOR: Mutex<IdAllocator> = Mutex::new(
-        IdAllocator::new(0..((MEMORY_FILE_END - MEMORY_FILE_START) / MEMORY_FILE_SIZE)).unwrap()
-    );
 }
 
 impl Disk {
@@ -38,7 +34,7 @@ impl Disk {
         unsafe {
             Self {
                 data: core::slice::from_raw_parts_mut(phys_to_virt(start_paddr) as *mut u8, size),
-                size,
+                _size: size,
             }
         }
     }
@@ -58,12 +54,9 @@ impl File {
     }
 
     pub fn new_memory_file(path: String) -> AcoreResult<Self> {
-        let offset_in_disk = MFD_ALLOCATOR.lock().alloc()? * MEMORY_FILE_SIZE;
-        Ok(Self {
-            path,
-            offset_in_disk,
-            size: MEMORY_FILE_END,
-        })
+        let id = path.as_bytes()[0] as usize
+            % ((MEMORY_FILE_END - MEMORY_FILE_START) / MEMORY_FILE_SIZE);
+        Ok(File::new(path, id * MEMORY_FILE_SIZE, MEMORY_FILE_SIZE))
     }
 
     pub fn as_slice_mut(&self) -> &'static mut [u8] {

@@ -2,7 +2,7 @@ ARCH ?= riscv64
 MODE ?= debug
 SMP ?= 2
 LOG ?=
-USER_ELF ?= ../user/build/$(ARCH)/read_after_write
+USER_ELF ?= ../user/build/$(ARCH)/test
 
 export ARCH
 

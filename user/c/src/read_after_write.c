@@ -129,6 +129,7 @@ int main(int argc, char* argv[])
         puts("result error");
         return ret;
     }
+    close(FD);
     puts("Simple test: OK");
     return 0;
 }

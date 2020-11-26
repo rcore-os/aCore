@@ -64,7 +64,10 @@ impl Syscall<'_> {
         Ok(self.thread.shared_res.files.lock().add_file(file)?)
     }
 
-    fn sys_close(&self, _fd: usize) -> SysResult {
+    fn sys_close(&self, fd: usize) -> SysResult {
+        let file = self.thread.shared_res.files.lock().get_file(fd)?;
+        file.release()?;
+        self.thread.shared_res.files.lock().remove_file(fd)?;
         Ok(0)
     }
 

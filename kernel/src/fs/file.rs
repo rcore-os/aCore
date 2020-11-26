@@ -11,6 +11,7 @@ use crate::memory::{DEVICE_END, DEVICE_START};
 pub const ELF_SIZE: usize = (DEVICE_END - DEVICE_START) >> 1;
 pub const MEMORY_FILE_START: usize = DEVICE_START + ELF_SIZE;
 pub const MEMORY_FILE_END: usize = DEVICE_END;
+pub const MEMORY_FILE_MAX_COUNT: usize = (MEMORY_FILE_END - MEMORY_FILE_START) / MEMORY_FILE_SIZE;
 pub const MEMORY_FILE_SIZE: usize = 0x100_0000;
 
 pub struct Disk {
@@ -54,8 +55,7 @@ impl File {
     }
 
     pub fn new_memory_file(path: String) -> AcoreResult<Self> {
-        let id = path.as_bytes()[0] as usize
-            % ((MEMORY_FILE_END - MEMORY_FILE_START) / MEMORY_FILE_SIZE);
+        let id = path.len() as usize % MEMORY_FILE_MAX_COUNT;
         Ok(File::new(path, id * MEMORY_FILE_SIZE, MEMORY_FILE_SIZE))
     }
 

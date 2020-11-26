@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define BUFFER_ENTRIES (4)
+#define BUFFER_ENTRIES (64)
 #define BS             (0x1000)
 #define INSIZE         (0x1000000)
 #define ID_MAX         (INSIZE / BS)
@@ -115,8 +115,7 @@ int run_test(struct async_call_buffer* buffer) {
 
 int main(int argc, char* argv[])
 {
-    char* path = "memory_file";
-    FD = open(path, sizeof(path), 0);
+    FD = open(argv[0], sizeof(argv[0]), 0);
     struct async_call_buffer buffer;
     int ret;
     ret = async_call_buffer_init(BUFFER_ENTRIES, BUFFER_ENTRIES << 1, &buffer);

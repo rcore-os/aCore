@@ -1,6 +1,8 @@
 .DS_Store
 .vscode
+.idea
 target
 Cargo.lock
 !kernel/Cargo.lock
 user/build/
+user/c/cmake-build-debug/

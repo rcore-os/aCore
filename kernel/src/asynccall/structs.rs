@@ -231,11 +231,12 @@ impl AsyncCallBuffer {
 
     #[allow(clippy::mut_from_ref)]
     pub(super) fn comp_entry_at(&self, idx: u32) -> &mut CompletionRingEntry {
+        let comp_entries_off = alignup_cache_line(
+            offset_of!(AsyncCallBufferLayout, req_entries)
+                + size_of::<RequestRingEntry>() * self.req_capacity as usize,
+        );
         unsafe {
-            let ptr = self.as_mut_ptr::<u8>().add(
-                offset_of!(AsyncCallBufferLayout, req_entries)
-                    + size_of::<RequestRingEntry>() * self.req_capacity as usize,
-            ) as *mut CompletionRingEntry;
+            let ptr = self.as_mut_ptr::<u8>().add(comp_entries_off) as *mut CompletionRingEntry;
             &mut *ptr.add((idx & self.comp_capacity_mask) as usize)
         }
     }

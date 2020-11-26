@@ -1,6 +1,8 @@
 #include <asynccall.h>
 #include <unistd.h>
 
+unsigned long long tag = 0;
+
 int async_call_buffer_init(int req_capacity, int comp_capacity, struct async_call_buffer* buffer)
 {
     struct async_call_info info;

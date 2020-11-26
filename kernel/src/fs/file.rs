@@ -8,9 +8,15 @@ use crate::error::AcoreResult;
 use crate::memory::addr::{phys_to_virt, PhysAddr};
 use crate::memory::{DEVICE_END, DEVICE_START};
 
+pub const ELF_SIZE: usize = (DEVICE_END - DEVICE_START) >> 1;
+pub const MEMORY_FILE_START: usize = DEVICE_START + ELF_SIZE;
+pub const MEMORY_FILE_END: usize = DEVICE_END;
+pub const MEMORY_FILE_MAX_COUNT: usize = (MEMORY_FILE_END - MEMORY_FILE_START) / MEMORY_FILE_SIZE;
+pub const MEMORY_FILE_SIZE: usize = 0x100_0000;
+
 pub struct Disk {
     data: &'static mut [u8],
-    size: usize,
+    _size: usize,
 }
 
 pub struct File {
@@ -29,13 +35,13 @@ impl Disk {
         unsafe {
             Self {
                 data: core::slice::from_raw_parts_mut(phys_to_virt(start_paddr) as *mut u8, size),
-                size,
+                _size: size,
             }
         }
     }
 
     pub fn lookup(&mut self, path: &str) -> File {
-        File::new(path.into(), 0, self.size)
+        File::new(path.into(), 0, ELF_SIZE)
     }
 }
 
@@ -46,6 +52,11 @@ impl File {
             offset_in_disk,
             size,
         }
+    }
+
+    pub fn new_memory_file(path: String) -> AcoreResult<Self> {
+        let id = path.len() as usize % MEMORY_FILE_MAX_COUNT;
+        Ok(File::new(path, id * MEMORY_FILE_SIZE, MEMORY_FILE_SIZE))
     }
 
     pub fn as_slice_mut(&self) -> &'static mut [u8] {

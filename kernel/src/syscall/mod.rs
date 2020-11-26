@@ -4,6 +4,7 @@ use core::convert::TryFrom;
 use crate::arch::syscall_ids::SyscallType as Sys;
 use crate::asynccall::{AsyncCall, AsyncCallInfoUser};
 use crate::error::{AcoreError, AcoreResult};
+use crate::fs::File;
 use crate::memory::uaccess::{UserInPtr, UserOutPtr};
 use crate::task::Thread;
 
@@ -33,6 +34,8 @@ impl<'a> Syscall<'a> {
 
         let [a0, a1, a2, a3, _a4, _a5] = args;
         let ret = match sys_type {
+            Sys::OPENAT => self.sys_openat(a0.into(), a1, a2),
+            Sys::CLOSE => self.sys_close(a0),
             Sys::READ => self.sys_read(a0, a1.into(), a2),
             Sys::WRITE => self.sys_write(a0, a1.into(), a2),
             Sys::SCHED_YIELD => self.sys_yield(),
@@ -55,6 +58,16 @@ impl<'a> Syscall<'a> {
 }
 
 impl Syscall<'_> {
+    fn sys_openat(&self, path: UserInPtr<u8>, count: usize, _mode: usize) -> SysResult {
+        let path = unsafe { alloc::string::String::from_utf8_unchecked(path.read_array(count)?) };
+        let file = Arc::new(File::new_memory_file(path)?);
+        Ok(self.thread.shared_res.files.lock().add_file(file)?)
+    }
+
+    fn sys_close(&self, _fd: usize) -> SysResult {
+        Ok(0)
+    }
+
     fn sys_read(&self, fd: usize, mut base: UserOutPtr<u8>, count: usize) -> SysResult {
         let file = self.thread.shared_res.files.lock().get_file(fd)?;
         let mut buf = vec![0u8; count];

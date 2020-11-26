@@ -68,6 +68,8 @@ int setup_async_call(int req_capacity, int comp_capacity, struct async_call_info
 
 int async_call_buffer_init(int req_capacity, int comp_capacity, struct async_call_buffer* buffer);
 
+extern unsigned long long tag;
+
 static inline void async_call_rw(int opcode, struct req_ring_entry* req, int fd, const void* addr,
                                  unsigned len, uint64_t offset)
 {
@@ -76,12 +78,19 @@ static inline void async_call_rw(int opcode, struct req_ring_entry* req, int fd,
     req->offset = offset;
     req->user_buf_addr = (uint64_t)addr;
     req->buf_size = len;
+    req->user_data = tag++;
 }
 
 static inline void async_call_write(struct req_ring_entry* req, int fd, const void* addr,
                                     unsigned len, uint64_t offset)
 {
     async_call_rw(ASYNC_CALL_WRITE, req, fd, addr, len, offset);
+}
+
+static inline void async_call_read(struct req_ring_entry* req, int fd, const void* addr,
+                                   unsigned len, uint64_t offset)
+{
+    async_call_rw(ASYNC_CALL_READ, req, fd, addr, len, offset);
 }
 
 struct req_ring_entry* req_ring_get_entry(struct async_call_buffer* buffer, uint32_t idx);

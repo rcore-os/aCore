@@ -33,4 +33,6 @@ typedef intptr_t ssize_t;
 
 typedef int pid_t;
 
+#define NULL ((void *)0)
+
 #endif // __STDDEF_H__

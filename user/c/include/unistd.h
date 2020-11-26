@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-int open(const char*, int, ...);
+int open(const char*, size_t, ...);
 
 ssize_t read(int, void*, size_t);
 ssize_t write(int, const void*, size_t);
